@@ -6,7 +6,7 @@
     "name": "SessionHub",
     "url": "https://sessionhub.io"
   },
-  "repository": "https://github.com/sessionhub/sessionhub-plugin",
+  "repository": "https://github.com/sessionhuborg/plugin",
   "homepage": "https://sessionhub.io",
   "license": "MIT",
   "keywords": ["session-tracking", "analytics", "context-injection", "development", "logging", "productivity"],
