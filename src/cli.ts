@@ -158,10 +158,9 @@ program
         process.exit(1);
       }
 
-      // Copy backend URL from default config
-      // Note: Supabase credentials are no longer stored in the plugin config
-      // All Supabase operations now go through the backend
-      config.backendGrpcUrl = fullConfig.backendGrpcUrl;
+      // Always use the default backend URL (plugin.sessionhub.dev)
+      // This ensures users with old cached URLs get updated
+      config.backendGrpcUrl = 'plugin.sessionhub.dev';
 
       // Save config with restrictive permissions (contains API key)
       writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });

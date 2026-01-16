@@ -96,7 +96,7 @@ export class ConfigManager {
       chmodSync(this.configFile, 0o600);
       this.config = config;
     } catch (error) {
-      console.error(`Error saving config: ${error}`);
+      logger.error(`Error saving config: ${error instanceof Error ? error.message : error}`);
     }
   }
 

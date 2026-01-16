@@ -30816,8 +30816,22 @@ var coerce = {
 var NEVER = INVALID;
 
 // src/logger.ts
+var LOG_LEVEL_PRIORITY = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3
+};
 var Logger = class {
+  minLevel;
+  constructor() {
+    this.minLevel = process.env.SESSIONHUB_DEBUG === "1" ? "DEBUG" : "ERROR";
+  }
+  shouldLog(level) {
+    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.minLevel];
+  }
   write(level, message, ...args) {
+    if (!this.shouldLog(level)) return;
     const timestamp = (/* @__PURE__ */ new Date()).toISOString();
     const formattedMessage = `[${timestamp}] [${level}] ${message}`;
     if (args.length > 0) {
@@ -30837,6 +30851,12 @@ var Logger = class {
   }
   debug(message, ...args) {
     this.write("DEBUG", message, ...args);
+  }
+  /**
+   * Enable verbose logging (for debugging)
+   */
+  enableDebug() {
+    this.minLevel = "DEBUG";
   }
 };
 var logger = new Logger();
@@ -30944,7 +30964,7 @@ var ConfigManager = class {
       (0, import_fs.chmodSync)(this.configFile, 384);
       this.config = config;
     } catch (error) {
-      console.error(`Error saving config: ${error}`);
+      logger.error(`Error saving config: ${error instanceof Error ? error.message : error}`);
     }
   }
   getConfig() {
@@ -31413,7 +31433,7 @@ var GrpcAPIClient = class {
         this.getMetadata(),
         (error, response) => {
           if (error) {
-            console.error("Stream failed:", error.message);
+            logger.debug(`Stream failed: ${error.message}`);
             reject(error);
             return;
           }
@@ -32187,7 +32207,7 @@ var TranscriptParser = class {
         agentIdMap
       };
     } catch (error) {
-      console.error("Failed to parse transcript file:", error);
+      logger.debug(`Failed to parse transcript file: ${error instanceof Error ? error.message : error}`);
       return null;
     }
   }
@@ -32496,11 +32516,11 @@ var TranscriptParser = class {
         logger.info(`Latest file: ${latestFile.file}`);
         return latestFile.path;
       } catch (error) {
-        console.error(`Failed to read Claude projects directory: ${claudeProjectsDir}`, error);
+        logger.debug(`Claude projects directory not found: ${claudeProjectsDir}`);
         return null;
       }
     } catch (error) {
-      console.error("Failed to find latest transcript file:", error);
+      logger.debug(`Failed to find latest transcript file: ${error instanceof Error ? error.message : error}`);
       return null;
     }
   }
@@ -32765,7 +32785,7 @@ program.command("setup").description("Configure SessionHub with your API key").o
       console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
       process.exit(1);
     }
-    config.backendGrpcUrl = fullConfig.backendGrpcUrl;
+    config.backendGrpcUrl = "plugin.sessionhub.dev";
     (0, import_fs3.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 384 });
     const output = {
       success: true,

@@ -540,7 +540,7 @@ export class GrpcAPIClient {
         this.getMetadata(),
         (error: grpc.ServiceError | null, response: any) => {
           if (error) {
-            console.error('Stream failed:', error.message);
+            logger.debug(`Stream failed: ${error.message}`);
             reject(error);
             return;
           }

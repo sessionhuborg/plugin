@@ -725,7 +725,7 @@ export class TranscriptParser {
         agentIdMap,
       };
     } catch (error) {
-      console.error('Failed to parse transcript file:', error);
+      logger.debug(`Failed to parse transcript file: ${error instanceof Error ? error.message : error}`);
       return null;
     }
   }
@@ -1127,11 +1127,12 @@ export class TranscriptParser {
         logger.info(`Latest file: ${latestFile.file}`);
         return latestFile.path;
       } catch (error) {
-        console.error(`Failed to read Claude projects directory: ${claudeProjectsDir}`, error);
+        // Directory doesn't exist - this is expected if session started from different path
+        logger.debug(`Claude projects directory not found: ${claudeProjectsDir}`);
         return null;
       }
     } catch (error) {
-      console.error('Failed to find latest transcript file:', error);
+      logger.debug(`Failed to find latest transcript file: ${error instanceof Error ? error.message : error}`);
       return null;
     }
   }

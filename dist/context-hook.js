@@ -24122,8 +24122,22 @@ var import_path = require("path");
 var import_url = require("url");
 
 // src/logger.ts
+var LOG_LEVEL_PRIORITY = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3
+};
 var Logger = class {
+  minLevel;
+  constructor() {
+    this.minLevel = process.env.SESSIONHUB_DEBUG === "1" ? "DEBUG" : "ERROR";
+  }
+  shouldLog(level) {
+    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.minLevel];
+  }
   write(level, message, ...args) {
+    if (!this.shouldLog(level)) return;
     const timestamp = (/* @__PURE__ */ new Date()).toISOString();
     const formattedMessage = `[${timestamp}] [${level}] ${message}`;
     if (args.length > 0) {
@@ -24143,6 +24157,12 @@ var Logger = class {
   }
   debug(message, ...args) {
     this.write("DEBUG", message, ...args);
+  }
+  /**
+   * Enable verbose logging (for debugging)
+   */
+  enableDebug() {
+    this.minLevel = "DEBUG";
   }
 };
 var logger = new Logger();
@@ -24583,7 +24603,7 @@ var GrpcAPIClient = class {
         this.getMetadata(),
         (error, response) => {
           if (error) {
-            console.error("Stream failed:", error.message);
+            logger.debug(`Stream failed: ${error.message}`);
             reject(error);
             return;
           }

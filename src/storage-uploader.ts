@@ -5,6 +5,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { decode } from 'base64-arraybuffer';
+import { logger } from './logger.js';
 
 export interface AttachmentMetadata {
   interactionIndex: number;
@@ -50,7 +51,7 @@ export class StorageUploader {
         });
 
       if (error) {
-        console.error(`[StorageUploader] Upload failed: ${error.message}`, error);
+        logger.debug(`Upload failed: ${error.message}`);
         return null;
       }
 
@@ -64,7 +65,7 @@ export class StorageUploader {
         uploadedAt: new Date().toISOString(),
       };
     } catch (error) {
-      console.error(`[StorageUploader] Exception during upload:`, error);
+      logger.debug(`Exception during upload: ${error instanceof Error ? error.message : error}`);
       return null;
     }
   }
