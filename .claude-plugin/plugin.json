@@ -10,6 +10,5 @@
   "homepage": "https://sessionhub.io",
   "license": "MIT",
   "keywords": ["session-tracking", "analytics", "context-injection", "development", "logging", "productivity"],
-  "commands": "./commands",
-  "hooks": "./hooks/hooks.json"
+  "commands": "./commands"
 }
