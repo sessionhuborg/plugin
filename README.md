@@ -2,6 +2,19 @@
 
 Capture and analyze your Claude Code development sessions with SessionHub.
 
+## Architecture
+
+```
+┌──────────────┐      ┌──────────────────┐      ┌──────────────┐      ┌───────────┐
+│  Claude Code │ ──── │ SessionHub Plugin│ ──── │   Backend    │ ──── │ Dashboard │
+│     CLI      │      │                  │      │   (gRPC)     │      │   (Web)   │
+└──────────────┘      └──────────────────┘      └──────────────┘      └───────────┘
+       │                      │                        │                    │
+       │                      │                        │                    │
+   Developer              Captures &               Stores &             View &
+   writes code          injects context           analyzes            analyze
+```
+
 ## Quick Start
 
 ```bash
