@@ -24128,7 +24128,7 @@ var GrpcAPIClient = class {
       case grpc.status.DEADLINE_EXCEEDED:
         return `Request timed out. The server may be busy - please try again.`;
       case grpc.status.UNAUTHENTICATED:
-        return `Invalid API key. Run /sessionhub:setup with a valid key from https://sessionhub.io/settings`;
+        return `Invalid API key. Run /sessionhub:setup with a valid key from https://sessionhub.dev/settings`;
       case grpc.status.PERMISSION_DENIED:
         return `Access denied. Your API key may not have permission for this operation.`;
       case grpc.status.RESOURCE_EXHAUSTED:
@@ -24793,7 +24793,7 @@ async function isAutoSaveEnabled(config) {
   try {
     const client = new GrpcAPIClient(
       config.user.apiKey,
-      config.backendGrpcUrl || "api.sessionhub.io:443",
+      config.backendGrpcUrl || "api.sessionhub.dev:443",
       config.grpcUseTls
     );
     const prefs = await client.getUserPreferences();

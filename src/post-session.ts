@@ -191,7 +191,7 @@ async function isAutoSaveEnabled(config: Config): Promise<boolean> {
   try {
     const client = new GrpcAPIClient(
       config.user.apiKey,
-      config.backendGrpcUrl || 'api.sessionhub.io:443',
+      config.backendGrpcUrl || 'api.sessionhub.dev:443',
       config.grpcUseTls
     );
 

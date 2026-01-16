@@ -13,7 +13,7 @@ Set up SessionHub by configuring your API key. This is required before you can c
 
 1. **Get the API key**:
    - If $1 is provided, use that as the API key
-   - If not provided, ask the user: "Please enter your SessionHub API key (get one at https://sessionhub.io/settings):"
+   - If not provided, ask the user: "Please enter your SessionHub API key (get one at https://sessionhub.dev/settings):"
 
 2. **Validate the API key format**:
    - API key should not be empty

@@ -5,10 +5,10 @@
   "description": "SessionHub plugin for capturing and analyzing Claude Code sessions",
   "owner": {
     "name": "SessionHub",
-    "email": "support@sessionhub.io"
+    "email": "support@sessionhub.dev"
   },
   "metadata": {
-    "homepage": "https://sessionhub.io",
+    "homepage": "https://sessionhub.dev",
     "documentation": "https://github.com/sessionhuborg/plugin#readme"
   },
   "plugins": [

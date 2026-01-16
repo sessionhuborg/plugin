@@ -48,5 +48,5 @@ node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js capture \
 4. **Handle errors**:
    - If capture fails with `session_limit_exceeded` error, display:
      - "Session limit reached (X/Y sessions used)"
-     - "Upgrade to Pro for unlimited sessions: https://sessionhub.io/pricing"
+     - "Upgrade to Pro for unlimited sessions: https://sessionhub.dev/pricing"
    - For other errors, report the error message.

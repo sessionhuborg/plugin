@@ -34,7 +34,7 @@ function showSetupInstructions(): void {
   console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.error('\n  To get started, run:\n');
   console.error('    /setup <your-api-key>\n');
-  console.error('  Get your API key at: https://sessionhub.io/settings');
+  console.error('  Get your API key at: https://sessionhub.dev/settings');
   console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
@@ -58,7 +58,7 @@ async function initializeClient(apiKey?: string): Promise<{ client: GrpcAPIClien
     console.error('\n  Your API key appears to be invalid or the server is unreachable.');
     console.error('\n  To reconfigure, run:\n');
     console.error('    /setup <your-api-key>\n');
-    console.error('  Get a new API key at: https://sessionhub.io/settings');
+    console.error('  Get a new API key at: https://sessionhub.dev/settings');
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     return null;
   }
@@ -153,7 +153,7 @@ program
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.error('\n  The API key could not be validated.');
         console.error('  Please check your key and try again.');
-        console.error('\n  Get your API key at: https://sessionhub.io/settings');
+        console.error('\n  Get your API key at: https://sessionhub.dev/settings');
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         process.exit(1);
       }
@@ -471,7 +471,7 @@ program
               message: `Session limit reached (${quota.currentCount}/${quota.limit} sessions). Cannot import any sessions.`,
               currentCount: quota.currentCount,
               limit: quota.limit,
-              upgradeUrl: 'https://sessionhub.io/pricing',
+              upgradeUrl: 'https://sessionhub.dev/pricing',
               totalFiles: transcriptFiles.length,
             };
             console.log(JSON.stringify(output, null, 2));
@@ -565,7 +565,7 @@ program
         wasLimited,
         limitInfo: wasLimited ? {
           skippedCount,
-          upgradeUrl: 'https://sessionhub.io/pricing',
+          upgradeUrl: 'https://sessionhub.dev/pricing',
         } : undefined,
         results,
       };

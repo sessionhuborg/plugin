@@ -46,7 +46,7 @@ describe('Session Limit Error Handling', () => {
   describe('parseSessionLimitError', () => {
     it('should parse valid session limit error', () => {
       const error = new Error(
-        'session_limit_exceeded:current=25:limit=25:upgrade_url=https://sessionhub.io/pricing'
+        'session_limit_exceeded:current=25:limit=25:upgrade_url=https://sessionhub.dev/pricing'
       );
       const result = parseSessionLimitError(error);
 
@@ -54,12 +54,12 @@ describe('Session Limit Error Handling', () => {
       expect(result?.type).toBe('session_limit_exceeded');
       expect(result?.currentCount).toBe(25);
       expect(result?.limit).toBe(25);
-      expect(result?.upgradeUrl).toBe('https://sessionhub.io/pricing');
+      expect(result?.upgradeUrl).toBe('https://sessionhub.dev/pricing');
     });
 
     it('should parse error with different counts', () => {
       const error = new Error(
-        'session_limit_exceeded:current=10:limit=25:upgrade_url=https://sessionhub.io/pricing'
+        'session_limit_exceeded:current=10:limit=25:upgrade_url=https://sessionhub.dev/pricing'
       );
       const result = parseSessionLimitError(error);
 
@@ -70,7 +70,7 @@ describe('Session Limit Error Handling', () => {
 
     it('should parse error with zero current count', () => {
       const error = new Error(
-        'session_limit_exceeded:current=0:limit=25:upgrade_url=https://sessionhub.io/pricing'
+        'session_limit_exceeded:current=0:limit=25:upgrade_url=https://sessionhub.dev/pricing'
       );
       const result = parseSessionLimitError(error);
 
@@ -110,7 +110,7 @@ describe('Session Limit Error Handling', () => {
     it('should parse error wrapped in gRPC message', () => {
       // gRPC errors often have the actual message wrapped
       const error = new Error(
-        'Failed to upsert session: session_limit_exceeded:current=25:limit=25:upgrade_url=https://sessionhub.io/pricing'
+        'Failed to upsert session: session_limit_exceeded:current=25:limit=25:upgrade_url=https://sessionhub.dev/pricing'
       );
       const result = parseSessionLimitError(error);
 
@@ -209,7 +209,7 @@ describe('Session Limit Error Handling', () => {
         type: 'session_limit_exceeded',
         currentCount: 25,
         limit: 25,
-        upgradeUrl: 'https://sessionhub.io/pricing',
+        upgradeUrl: 'https://sessionhub.dev/pricing',
       };
 
       expect(error.type).toBe('session_limit_exceeded');

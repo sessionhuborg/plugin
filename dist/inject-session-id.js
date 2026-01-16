@@ -97,7 +97,7 @@ async function main() {
     const contextParts = [];
     if (!configured) {
       contextParts.push(
-        "**SessionHub Setup Required**: Run `/setup <your-api-key>` to enable session capture. Get your API key at https://sessionhub.io/settings"
+        "**SessionHub Setup Required**: Run `/setup <your-api-key>` to enable session capture. Get your API key at https://sessionhub.dev/settings"
       );
     }
     if (sessionId && isValidUUID(sessionId)) {

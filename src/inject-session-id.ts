@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     if (!configured) {
       contextParts.push(
         '**SessionHub Setup Required**: Run `/setup <your-api-key>` to enable session capture. ' +
-        'Get your API key at https://sessionhub.io/settings'
+        'Get your API key at https://sessionhub.dev/settings'
       );
     }
 

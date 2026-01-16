@@ -31061,7 +31061,7 @@ var GrpcAPIClient = class {
       case grpc.status.DEADLINE_EXCEEDED:
         return `Request timed out. The server may be busy - please try again.`;
       case grpc.status.UNAUTHENTICATED:
-        return `Invalid API key. Run /sessionhub:setup with a valid key from https://sessionhub.io/settings`;
+        return `Invalid API key. Run /sessionhub:setup with a valid key from https://sessionhub.dev/settings`;
       case grpc.status.PERMISSION_DENIED:
         return `Access denied. Your API key may not have permission for this operation.`;
       case grpc.status.RESOURCE_EXHAUSTED:
@@ -32698,7 +32698,7 @@ function showSetupInstructions() {
   console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
   console.error("\n  To get started, run:\n");
   console.error("    /setup <your-api-key>\n");
-  console.error("  Get your API key at: https://sessionhub.io/settings");
+  console.error("  Get your API key at: https://sessionhub.dev/settings");
   console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
 }
 async function initializeClient(apiKey) {
@@ -32718,7 +32718,7 @@ async function initializeClient(apiKey) {
     console.error("\n  Your API key appears to be invalid or the server is unreachable.");
     console.error("\n  To reconfigure, run:\n");
     console.error("    /setup <your-api-key>\n");
-    console.error("  Get a new API key at: https://sessionhub.io/settings");
+    console.error("  Get a new API key at: https://sessionhub.dev/settings");
     console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
     return null;
   }
@@ -32781,7 +32781,7 @@ program.command("setup").description("Configure SessionHub with your API key").o
       console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
       console.error("\n  The API key could not be validated.");
       console.error("  Please check your key and try again.");
-      console.error("\n  Get your API key at: https://sessionhub.io/settings");
+      console.error("\n  Get your API key at: https://sessionhub.dev/settings");
       console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
       process.exit(1);
     }
@@ -33019,7 +33019,7 @@ program.command("import-all").description("Import all Claude Code sessions from 
             message: `Session limit reached (${quota.currentCount}/${quota.limit} sessions). Cannot import any sessions.`,
             currentCount: quota.currentCount,
             limit: quota.limit,
-            upgradeUrl: "https://sessionhub.io/pricing",
+            upgradeUrl: "https://sessionhub.dev/pricing",
             totalFiles: transcriptFiles.length
           };
           console.log(JSON.stringify(output2, null, 2));
@@ -33099,7 +33099,7 @@ program.command("import-all").description("Import all Claude Code sessions from 
       wasLimited,
       limitInfo: wasLimited ? {
         skippedCount,
-        upgradeUrl: "https://sessionhub.io/pricing"
+        upgradeUrl: "https://sessionhub.dev/pricing"
       } : void 0,
       results
     };

@@ -15,7 +15,7 @@ Capture and analyze your Claude Code development sessions with SessionHub.
 /sessionhub:setup YOUR_API_KEY
 ```
 
-Get your API key at: [app.sessionhub.io/settings](https://app.sessionhub.io/settings)
+Get your API key at: [app.sessionhub.dev/settings](https://app.sessionhub.dev/settings)
 
 ## Features
 
@@ -187,7 +187,7 @@ This happens when session ID injection isn't working. Ensure:
 
 If you see "Authentication Failed", your API key may be invalid or expired:
 1. Run `/sessionhub:setup NEW_API_KEY` with a fresh key
-2. Get a new key at https://app.sessionhub.io/settings
+2. Get a new key at https://app.sessionhub.dev/settings
 
 ### Plugin not loading
 
