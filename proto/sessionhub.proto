@@ -1,0 +1,319 @@
+syntax = "proto3";
+
+package sessionhub;
+
+option go_package = "github.com/sessionhub/backend/proto";
+
+// Main service for SessionHub backend
+service SessionHubService {
+  // Authentication
+  rpc ValidateApiKey(ValidateApiKeyRequest) returns (ValidateApiKeyResponse);
+
+  // Projects
+  rpc GetProjects(GetProjectsRequest) returns (GetProjectsResponse);
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+
+  // Sessions
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc UpsertSession(CreateSessionRequest) returns (UpsertSessionResponse);
+  rpc GetSession(GetSessionRequest) returns (Session);
+  rpc UpdateSession(UpdateSessionRequest) returns (Session);
+
+  // Interactions - Streaming for large imports
+  rpc StreamInteractions(stream StreamInteractionsRequest) returns (StreamInteractionsResponse);
+
+  // Batch operations (alternative to streaming)
+  rpc AddInteractionsBatch(AddInteractionsBatchRequest) returns (AddInteractionsBatchResponse);
+
+  // Observations for context injection
+  rpc GetProjectObservations(GetProjectObservationsRequest) returns (GetProjectObservationsResponse);
+
+  // User preferences
+  rpc GetUserPreferences(GetUserPreferencesRequest) returns (GetUserPreferencesResponse);
+
+  // Attachment storage
+  rpc UploadAttachment(UploadAttachmentRequest) returns (UploadAttachmentResponse);
+
+  // Session quota for free tier limit enforcement
+  rpc GetSessionQuota(GetSessionQuotaRequest) returns (GetSessionQuotaResponse);
+}
+
+// ============================================================================
+// Authentication Messages
+// ============================================================================
+
+message ValidateApiKeyRequest {
+  string api_key = 1;
+}
+
+message ValidateApiKeyResponse {
+  string user_id = 1;
+  string email = 2;
+  string subscription_tier = 3;
+}
+
+// ============================================================================
+// Project Messages
+// ============================================================================
+
+message GetProjectsRequest {
+  // Empty - uses authenticated user from JWT
+}
+
+message GetProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  string display_name = 2;
+  optional string description = 3;
+  optional string git_remote = 4;
+  map<string, string> metadata = 5;
+}
+
+message Project {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string display_name = 4;
+  optional string description = 5;
+  optional string git_remote = 6;
+  string created_at = 7;
+  string updated_at = 8;
+  optional string last_activity_at = 9;
+  bool archived = 10;
+  map<string, string> metadata = 11;
+
+  // GitHub integration fields
+  optional string github_repo_name = 12;
+  optional string github_repo_owner = 13;
+  optional string github_repo_id = 14;
+  optional string github_default_branch = 15;
+  optional string github_connected_at = 16;
+}
+
+// ============================================================================
+// Session Messages
+// ============================================================================
+
+message CreateSessionRequest {
+  string project_name = 1;
+  optional string project_path = 2;
+  string start_time = 3;
+  optional string end_time = 4;
+  optional string name = 5;
+  string tool_name = 6;
+  optional string git_branch = 7;
+  optional string type = 17; // Session type: feature, bugfix, refactor, exploration, debugging
+
+  // Token counts
+  int64 input_tokens = 8;
+  int64 output_tokens = 9;
+  int64 cache_create_tokens = 10;
+  int64 cache_read_tokens = 11;
+
+  // Structured data
+  repeated TodoSnapshot todo_snapshots = 12;
+  repeated Plan plans = 13;
+  repeated AttachmentMetadata attachment_urls = 14;
+  repeated InteractionData interactions = 15;
+  map<string, string> metadata = 16;
+  optional string sub_sessions_json = 18; // JSONB data as JSON string
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message UpsertSessionResponse {
+  string session_id = 1;
+  bool was_updated = 2; // true if existing session was updated, false if new session was created
+  bool success = 3;
+  string message = 4;
+  int32 new_interactions_count = 5; // number of new interactions added (for updates, only newly appended ones)
+
+  // Analysis status (triggered automatically based on user preferences)
+  bool analysis_triggered = 6;
+  bool observations_triggered = 7;
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message UpdateSessionRequest {
+  string session_id = 1;
+  optional string end_time = 2;
+}
+
+message Session {
+  string id = 1;
+  string project_id = 2;
+  string user_id = 3;
+  string start_time = 4;
+  optional string end_time = 5;
+  optional string name = 6;
+  optional string git_branch = 7;
+  int64 input_tokens = 8;
+  int64 output_tokens = 9;
+  int64 cache_create_tokens = 10;
+  int64 cache_read_tokens = 11;
+  int32 interaction_count = 12;
+  repeated TodoSnapshot todo_snapshots = 13;
+  repeated Plan plans = 14;
+  repeated AttachmentMetadata attachment_urls = 15;
+  map<string, string> metadata = 16;
+  string created_at = 17;
+  string updated_at = 18;
+  optional string sub_sessions_json = 19; // JSONB data as JSON string
+}
+
+// ============================================================================
+// Interaction Messages
+// ============================================================================
+
+message StreamInteractionsRequest {
+  string session_id = 1;
+  InteractionData interaction = 2;
+}
+
+message StreamInteractionsResponse {
+  int32 processed = 1;
+  int32 failed = 2;
+  bool success = 3;
+  string message = 4;
+}
+
+message AddInteractionsBatchRequest {
+  string session_id = 1;
+  repeated InteractionData interactions = 2;
+}
+
+message AddInteractionsBatchResponse {
+  int32 processed = 1;
+  int32 failed = 2;
+  bool success = 3;
+  string message = 4;
+}
+
+message InteractionData {
+  string timestamp = 1;
+  string interaction_type = 2;
+  string content = 3;
+  optional string tool_name = 4;
+  map<string, string> metadata = 5;
+  optional int64 input_tokens = 6;
+  optional int64 output_tokens = 7;
+}
+
+// ============================================================================
+// Supporting Types
+// ============================================================================
+
+message TodoSnapshot {
+  string timestamp = 1;
+  repeated Todo todos = 2;
+}
+
+message Todo {
+  string content = 1;
+  string status = 2;
+  string active_form = 3;
+}
+
+message Plan {
+  string timestamp = 1;
+  string plan = 2;
+}
+
+message AttachmentMetadata {
+  string storage_path = 1;
+  string public_url = 2;
+  string media_type = 3;
+  int32 interaction_index = 4;
+  string uploaded_at = 5;
+}
+
+// ============================================================================
+// Observations Messages (for context injection)
+// ============================================================================
+
+message GetProjectObservationsRequest {
+  string project_id = 1;
+  optional int32 limit = 2; // Max observations to return, default 50
+}
+
+message GetProjectObservationsResponse {
+  repeated Observation observations = 1;
+  int32 total_count = 2;
+}
+
+message Observation {
+  string id = 1;
+  string session_id = 2;
+  string project_id = 3;
+  string type = 4;              // architecture, pattern, decision, dependency, issue, insight
+  string title = 5;
+  optional string subtitle = 6;
+  string narrative = 7;
+  repeated string facts = 8;    // Key facts as array
+  repeated string concepts = 9;  // Related concepts/topics
+  repeated string files = 10;    // Related file paths
+  optional string tool_name = 11;
+  string created_at = 12;
+}
+
+// ============================================================================
+// User Preferences Messages
+// ============================================================================
+
+message GetUserPreferencesRequest {
+  // Empty - uses authenticated user from context
+}
+
+message GetUserPreferencesResponse {
+  bool auto_analysis = 1;
+  bool auto_observations = 2;
+  bool context_injection = 3;
+  int32 context_injection_limit = 4;  // Max observations to inject
+  bool auto_save_session = 5;         // Auto-save on /clear and session end
+  int32 context_injection_max_tokens = 6;  // Token budget for context injection
+  int32 context_injection_full_details_count = 7;  // Number of observations to show full details
+}
+
+// ============================================================================
+// Attachment Storage Messages
+// ============================================================================
+
+message UploadAttachmentRequest {
+  string session_id = 1;
+  int32 interaction_index = 2;
+  string base64_data = 3;           // Base64-encoded file data
+  string media_type = 4;            // MIME type (e.g., "image/png")
+  optional string filename = 5;     // Optional original filename
+}
+
+message UploadAttachmentResponse {
+  bool success = 1;
+  string storage_path = 2;          // Path in storage bucket
+  string public_url = 3;            // Public URL to access the file
+  string error = 4;                 // Error message if failed
+}
+
+// ============================================================================
+// Session Quota Messages (for free tier limit enforcement)
+// ============================================================================
+
+message GetSessionQuotaRequest {
+  // Empty - uses authenticated user from context
+}
+
+message GetSessionQuotaResponse {
+  int32 current_count = 1;      // Current number of sessions
+  int32 limit = 2;              // Session limit (-1 for unlimited)
+  int32 remaining = 3;          // Remaining sessions (-1 for unlimited)
+  string subscription_tier = 4; // "free" or "pro"
+}

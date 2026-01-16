@@ -1,0 +1,15 @@
+{
+  "name": "sessionhub",
+  "version": "1.0.0",
+  "description": "Capture and analyze Claude Code sessions with SessionHub. Features auto-capture, context injection, bulk import, and token tracking.",
+  "author": {
+    "name": "SessionHub",
+    "url": "https://sessionhub.io"
+  },
+  "repository": "https://github.com/sessionhub/sessionhub-plugin",
+  "homepage": "https://sessionhub.io",
+  "license": "MIT",
+  "keywords": ["session-tracking", "analytics", "context-injection", "development", "logging", "productivity"],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json"
+}

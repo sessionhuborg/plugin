@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sessionhub-marketplace",
+  "version": "1.0.0",
+  "description": "SessionHub plugin for capturing and analyzing Claude Code sessions",
+  "owner": {
+    "name": "SessionHub",
+    "email": "support@sessionhub.io"
+  },
+  "metadata": {
+    "homepage": "https://sessionhub.io",
+    "documentation": "https://github.com/sessionhub/sessionhub-plugin#readme"
+  },
+  "plugins": [
+    {
+      "name": "sessionhub",
+      "description": "Capture and analyze your Claude Code development sessions with SessionHub. Auto-capture on session end, context injection from past sessions, bulk import, and token tracking.",
+      "source": "./",
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": ["session-tracking", "analytics", "context", "logging", "productivity"]
+    }
+  ]
+}
