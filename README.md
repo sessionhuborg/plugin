@@ -5,13 +5,10 @@ Capture and analyze your Claude Code development sessions with SessionHub.
 ## Quick Start
 
 ```bash
-# 1. Add the marketplace
-/plugin marketplace add sessionhub/sessionhub-plugin
+# 1. Install the plugin
+/plugin install https://github.com/sessionhuborg/plugin
 
-# 2. Install the plugin
-/plugin install sessionhub@sessionhub
-
-# 3. Configure your API key
+# 2. Configure your API key
 /sessionhub:setup YOUR_API_KEY
 ```
 
@@ -28,20 +25,10 @@ Get your API key at: [app.sessionhub.io/settings](https://app.sessionhub.io/sett
 
 ## Installation
 
-### From Claude Code Marketplace
+### From GitHub
 
 ```bash
-# Add the SessionHub marketplace
-/plugin marketplace add sessionhub/sessionhub-plugin
-
-# Install the plugin
-/plugin install sessionhub@sessionhub
-```
-
-### Direct GitHub Install
-
-```bash
-/plugin install https://github.com/sessionhub/sessionhub-plugin
+/plugin install https://github.com/sessionhuborg/plugin
 ```
 
 ### Verify Installation
@@ -128,17 +115,17 @@ The `SessionStart` hook also injects context from your past sessions, helping Cl
 
 ```bash
 # Clone the repository
-git clone https://github.com/sessionhub/sessionhub-plugin.git
-cd sessionhub-plugin
+git clone https://github.com/sessionhuborg/plugin.git
+cd plugin
 
 # Install dependencies
-npm install
+pnpm install
 
 # Build (bundles with esbuild for standalone distribution)
-npm run build
+pnpm run build
 
 # Run tests
-npm test
+pnpm test
 ```
 
 ### Build System
@@ -153,20 +140,15 @@ The plugin uses **esbuild** to bundle all dependencies into standalone JavaScrip
 
 ```bash
 # Install as local plugin
-/plugin install ./sessionhub-plugin
-
-# Or add as local marketplace
-/plugin marketplace add ./sessionhub-plugin
-/plugin install sessionhub@sessionhub-plugin
+/plugin install ./plugin
 ```
 
 ### Project Structure
 
 ```
-sessionhub-plugin/
+plugin/
 ├── .claude-plugin/
-│   ├── plugin.json        # Plugin manifest
-│   └── marketplace.json   # Marketplace config
+│   └── plugin.json        # Plugin manifest
 ├── commands/              # Slash command definitions
 ├── hooks/                 # Hook definitions and scripts
 ├── src/                   # TypeScript source
@@ -198,7 +180,7 @@ This happens when session ID injection isn't working. Ensure:
 
 If you see "Authentication Failed", your API key may be invalid or expired:
 1. Run `/sessionhub:setup NEW_API_KEY` with a fresh key
-2. Get a new key at https://sessionhub.io/settings
+2. Get a new key at https://app.sessionhub.io/settings
 
 ### Plugin not loading
 
