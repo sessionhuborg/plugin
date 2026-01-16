@@ -5,10 +5,13 @@ Capture and analyze your Claude Code development sessions with SessionHub.
 ## Quick Start
 
 ```bash
-# 1. Install the plugin
-/plugin install https://github.com/sessionhuborg/plugin
+# 1. Add the marketplace
+/plugin marketplace add https://github.com/sessionhuborg/plugin
 
-# 2. Configure your API key
+# 2. Install the plugin
+/plugin install sessionhub@sessionhuborg-plugin
+
+# 3. Configure your API key
 /sessionhub:setup YOUR_API_KEY
 ```
 
@@ -28,7 +31,11 @@ Get your API key at: [app.sessionhub.io/settings](https://app.sessionhub.io/sett
 ### From GitHub
 
 ```bash
-/plugin install https://github.com/sessionhuborg/plugin
+# 1. Add the marketplace
+/plugin marketplace add https://github.com/sessionhuborg/plugin
+
+# 2. Install the plugin
+/plugin install sessionhub@sessionhuborg-plugin
 ```
 
 ### Verify Installation
