@@ -10,6 +10,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { SessionApiData, UserInfo, ApiInteractionData } from './models.js';
 import { logger } from './logger.js';
+import { encryptSessionFields, isValidPublicKey } from './encryption.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -323,6 +324,36 @@ export class GrpcAPIClient {
     analysisTriggered: boolean;
     observationsTriggered: boolean;
   }> {
+    // Get encryption key (personal mode only for standalone plugin)
+    let publicKey: string | null = null;
+    let keyVersion = 0;
+    let encryptedFields: any = null;
+
+    try {
+      // Get user's public key for encryption
+      const keyData = await this.getUserPublicKey();
+      if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+        publicKey = keyData.publicKey;
+        keyVersion = keyData.keyVersion;
+        logger.info('Using personal encryption key for session data');
+      }
+
+      // Encrypt sensitive fields if we have a valid key
+      if (publicKey) {
+        encryptedFields = await encryptSessionFields({
+          interactions: sessionData.interactions,
+          todoSnapshots: sessionData.todo_snapshots,
+          plans: sessionData.plans,
+          subSessions: sessionData.sub_sessions,
+          attachmentUrls: sessionData.attachment_urls,
+        }, publicKey);
+        logger.info('Session data encrypted successfully');
+      }
+    } catch (error) {
+      // Encryption failure shouldn't block session capture - log and continue with plaintext
+      logger.warn('Failed to encrypt session data, sending plaintext:', error);
+    }
+
     return new Promise((resolve, reject) => {
       const serializedMetadata: Record<string, string> = {};
       if (sessionData.metadata) {
@@ -358,7 +389,10 @@ export class GrpcAPIClient {
         ? JSON.stringify(sessionData.sub_sessions)
         : undefined;
 
-      const request = {
+      // Build request - if encrypted, send encrypted fields and mark plaintext fields as empty
+      const isEncrypted = encryptedFields !== null;
+
+      const request: any = {
         project_name: sessionData.project_name,
         project_path: sessionData.project_path,
         start_time: sessionData.start_time,
@@ -371,15 +405,35 @@ export class GrpcAPIClient {
         output_tokens: sessionData.output_tokens || 0,
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
-        todo_snapshots: transformedTodoSnapshots,
-        plans: sessionData.plans && sessionData.plans.length > 0
-          ? sessionData.plans
-          : [],
-        attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0
+        metadata: serializedMetadata,
+      };
+
+      if (isEncrypted) {
+        // Send encrypted data
+        request.encryption_status = 'encrypted';
+        request.encryption_version = keyVersion;
+        request.encrypted_interactions = encryptedFields.encryptedInteractions;
+        request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
+        request.encrypted_plans = encryptedFields.encryptedPlans;
+        request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
+        request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
+        // Empty arrays for plaintext fields (backend stores encrypted versions)
+        request.todo_snapshots = [];
+        request.plans = [];
+        request.attachment_urls = [];
+        request.interactions = [];
+        request.sub_sessions_json = undefined;
+      } else {
+        // Send plaintext data
+        request.encryption_status = 'plaintext';
+        request.encryption_version = 0;
+        request.todo_snapshots = transformedTodoSnapshots;
+        request.plans = sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [];
+        request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0
           ? this.transformAttachmentMetadata(sessionData.attachment_urls)
-          : [],
-        sub_sessions_json: subSessionsJson,
-        interactions: (sessionData.interactions || []).map((int: any) => {
+          : [];
+        request.sub_sessions_json = subSessionsJson;
+        request.interactions = (sessionData.interactions || []).map((int: any) => {
           const serializedInteractionMetadata: Record<string, string> = {};
           if (int.metadata) {
             for (const [key, value] of Object.entries(int.metadata)) {
@@ -403,9 +457,8 @@ export class GrpcAPIClient {
             input_tokens: int.input_tokens || 0,
             output_tokens: int.output_tokens || 0,
           };
-        }),
-        metadata: serializedMetadata,
-      };
+        });
+      }
 
       this.client.upsertSession(
         request,
@@ -418,7 +471,8 @@ export class GrpcAPIClient {
           }
 
           const action = response.was_updated ? 'updated' : 'created';
-          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)`);
+          const encryptionNote = isEncrypted ? ' (encrypted)' : '';
+          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`);
           if (response.analysis_triggered) {
             logger.info('Analysis triggered based on user preferences');
           }
@@ -740,6 +794,39 @@ export class GrpcAPIClient {
           resolve({
             observations,
             totalCount: response.total_count || observations.length,
+          });
+        }
+      );
+    });
+  }
+
+  /**
+   * Get the authenticated user's public key for encryption
+   * Used for personal (non-team) session encryption
+   */
+  async getUserPublicKey(): Promise<{
+    publicKey: string;
+    keyVersion: number;
+  } | null> {
+    return new Promise((resolve, reject) => {
+      this.client.getUserPublicKey(
+        {},
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error: grpc.ServiceError | null, response: any) => {
+          if (error) {
+            // NOT_FOUND means user has no key configured
+            if (this.isNotFoundError(error)) {
+              resolve(null);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, 'Get user public key')));
+            return;
+          }
+
+          resolve({
+            publicKey: response.public_key,
+            keyVersion: response.key_version || 1,
           });
         }
       );

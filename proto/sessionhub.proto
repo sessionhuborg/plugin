@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sessionhub;
 
-option go_package = "github.com/sessionhub/backend/proto";
+option go_package = "github.com/vibelog/backend/proto";
 
 // Main service for SessionHub backend
 service SessionHubService {
@@ -36,6 +36,33 @@ service SessionHubService {
 
   // Session quota for free tier limit enforcement
   rpc GetSessionQuota(GetSessionQuotaRequest) returns (GetSessionQuotaResponse);
+
+  // ============================================================================
+  // Teams
+  // ============================================================================
+
+  // Team CRUD
+  rpc CreateTeam(CreateTeamRequest) returns (Team);
+  rpc GetTeam(GetTeamRequest) returns (Team);
+  rpc UpdateTeam(UpdateTeamRequest) returns (Team);
+  rpc DeleteTeam(DeleteTeamRequest) returns (DeleteTeamResponse);
+  rpc ListUserTeams(ListUserTeamsRequest) returns (ListUserTeamsResponse);
+
+  // Team Membership
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+  rpc RevokeInvitation(RevokeInvitationRequest) returns (RevokeInvitationResponse);
+  rpc ListPendingInvitations(ListPendingInvitationsRequest) returns (ListPendingInvitationsResponse);
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (UpdateMemberRoleResponse);
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse);
+
+  // Team Encryption Keys
+  rpc GetTeamPublicKey(GetTeamPublicKeyRequest) returns (GetTeamPublicKeyResponse);
+
+  // User Encryption Keys (for personal sessions)
+  rpc GetUserPublicKey(GetUserPublicKeyRequest) returns (GetUserPublicKeyResponse);
 }
 
 // ============================================================================
@@ -47,9 +74,9 @@ message ValidateApiKeyRequest {
 }
 
 message ValidateApiKeyResponse {
-  string user_id = 1;
-  string email = 2;
-  string subscription_tier = 3;
+  string user_id = 1;           // Supabase Auth UUID
+  string email = 3;
+  string subscription_tier = 4;
 }
 
 // ============================================================================
@@ -120,6 +147,18 @@ message CreateSessionRequest {
   repeated InteractionData interactions = 15;
   map<string, string> metadata = 16;
   optional string sub_sessions_json = 18; // JSONB data as JSON string
+
+  // Encryption fields (for E2E encrypted sessions)
+  optional string encryption_status = 19;  // "plaintext" or "encrypted"
+  optional int32 encryption_version = 20;  // Key version used for encryption
+
+  // Encrypted JSONB fields (when encryption_status = "encrypted")
+  // These contain EncryptedPayload JSON: {encryptedContent, encryptedKey, iv, version}
+  optional string encrypted_interactions = 21;
+  optional string encrypted_todo_snapshots = 22;
+  optional string encrypted_plans = 23;
+  optional string encrypted_sub_sessions = 24;
+  optional string encrypted_attachment_urls = 25;
 }
 
 message CreateSessionResponse {
@@ -312,8 +351,249 @@ message GetSessionQuotaRequest {
 }
 
 message GetSessionQuotaResponse {
-  int32 current_count = 1;      // Current number of sessions
-  int32 limit = 2;              // Session limit (-1 for unlimited)
-  int32 remaining = 3;          // Remaining sessions (-1 for unlimited)
-  string subscription_tier = 4; // "free" or "pro"
+  int32 current_count = 1;          // Current number of sessions
+  int32 limit = 2;                  // Session limit (-1 for unlimited/Pro tier)
+  int32 remaining = 3;              // Remaining sessions (or -1 for unlimited)
+  string subscription_tier = 4;     // "free" or "pro"
+}
+
+// ============================================================================
+// Team Messages
+// ============================================================================
+
+// Role enum for team members
+enum TeamRole {
+  TEAM_ROLE_UNSPECIFIED = 0;
+  TEAM_ROLE_OWNER = 1;
+  TEAM_ROLE_ADMIN = 2;
+  TEAM_ROLE_MEMBER = 3;
+  TEAM_ROLE_VIEWER = 4;
+}
+
+// Team plan enum
+enum TeamPlan {
+  TEAM_PLAN_UNSPECIFIED = 0;
+  TEAM_PLAN_STARTER = 1;
+  TEAM_PLAN_PRO = 2;
+  TEAM_PLAN_ENTERPRISE = 3;
+}
+
+// Core Team entity
+message Team {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string owner_id = 4;
+  bool is_personal = 14;               // True for single-person "Personal" teams
+  optional string avatar_url = 5;
+  optional string description = 6;
+  string public_key = 7;               // Team's public encryption key
+  int32 key_version = 8;
+  string created_at = 9;
+  string updated_at = 10;
+
+  // Included when fetching team details
+  int32 member_count = 11;
+  TeamRole current_user_role = 12;     // Role of the requesting user
+  optional TeamSubscription subscription = 13;
+}
+
+// Team member entity
+message TeamMember {
+  string id = 1;
+  string team_id = 2;
+  string user_id = 3;
+  string email = 4;
+  TeamRole role = 5;
+  optional string invited_by = 6;
+  string joined_at = 7;
+  bool has_encrypted_key = 8;          // Whether member has received team key
+}
+
+// Team invitation entity
+message TeamInvitation {
+  string id = 1;
+  string team_id = 2;
+  string email = 3;
+  TeamRole role = 4;
+  string invited_by = 5;
+  string expires_at = 6;
+  string created_at = 7;
+  optional string team_name = 8;       // Included for invitee view
+}
+
+// Team subscription entity
+message TeamSubscription {
+  string id = 1;
+  string team_id = 2;
+  TeamPlan plan = 3;
+  string status = 4;
+  int32 seat_count = 5;
+  optional string current_period_start = 6;
+  optional string current_period_end = 7;
+  int32 credits_remaining = 8;
+}
+
+// ============================================================================
+// Team CRUD Messages
+// ============================================================================
+
+message CreateTeamRequest {
+  string name = 1;
+  string slug = 2;
+  optional string description = 3;
+  optional string avatar_url = 4;
+
+  // E2E Encryption: Client generates team key pair
+  string public_key = 5;                      // Team's public key
+  string encrypted_private_key = 6;           // Team's private key encrypted with owner's public key
+}
+
+message GetTeamRequest {
+  oneof identifier {
+    string id = 1;
+    string slug = 2;
+  }
+}
+
+message UpdateTeamRequest {
+  string team_id = 1;
+  optional string name = 2;
+  optional string slug = 3;
+  optional string description = 4;
+  optional string avatar_url = 5;
+}
+
+message DeleteTeamRequest {
+  string team_id = 1;
+}
+
+message DeleteTeamResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListUserTeamsRequest {
+  // Empty - uses authenticated user from context
+}
+
+message ListUserTeamsResponse {
+  repeated Team teams = 1;
+}
+
+// ============================================================================
+// Team Membership Messages
+// ============================================================================
+
+message InviteMemberRequest {
+  string team_id = 1;
+  string email = 2;
+  TeamRole role = 3;
+}
+
+message InviteMemberResponse {
+  bool success = 1;
+  string invitation_token = 2;         // Plaintext token (only returned once)
+  string invitation_id = 3;
+  string expires_at = 4;
+  string message = 5;
+}
+
+message AcceptInvitationRequest {
+  string token = 1;                    // Plaintext invitation token
+
+  // E2E Encryption: New member receives team key encrypted for them
+  string encrypted_team_key = 2;       // Team private key encrypted with user's public key
+}
+
+message AcceptInvitationResponse {
+  bool success = 1;
+  string team_id = 2;
+  string team_name = 3;
+  TeamRole role = 4;
+  string message = 5;
+}
+
+message RevokeInvitationRequest {
+  string invitation_id = 1;
+}
+
+message RevokeInvitationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListPendingInvitationsRequest {
+  string team_id = 1;
+}
+
+message ListPendingInvitationsResponse {
+  repeated TeamInvitation invitations = 1;
+}
+
+message RemoveMemberRequest {
+  string team_id = 1;
+  string user_id = 2;
+}
+
+message RemoveMemberResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateMemberRoleRequest {
+  string team_id = 1;
+  string user_id = 2;
+  TeamRole new_role = 3;
+}
+
+message UpdateMemberRoleResponse {
+  bool success = 1;
+  TeamMember member = 2;
+  string message = 3;
+}
+
+message ListMembersRequest {
+  string team_id = 1;
+}
+
+message ListMembersResponse {
+  repeated TeamMember members = 1;
+  int32 total_count = 2;
+}
+
+message TransferOwnershipRequest {
+  string team_id = 1;
+  string new_owner_id = 2;
+}
+
+message TransferOwnershipResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ============================================================================
+// Team Encryption Key Messages
+// ============================================================================
+
+message GetTeamPublicKeyRequest {
+  string team_id = 1;
+}
+
+message GetTeamPublicKeyResponse {
+  string public_key = 1;
+  int32 key_version = 2;
+}
+
+// ============================================================================
+// User Encryption Key Messages
+// ============================================================================
+
+message GetUserPublicKeyRequest {
+  // Empty - uses authenticated user from context
+}
+
+message GetUserPublicKeyResponse {
+  string public_key = 1;
+  int32 key_version = 2;
 }

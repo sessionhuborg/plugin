@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.0
+// SessionHub Plugin v1.0.1
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };

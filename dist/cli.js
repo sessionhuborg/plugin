@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.0
+// SessionHub Plugin v1.0.1
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -30998,6 +30998,86 @@ var grpc = __toESM(require_src3());
 var protoLoader = __toESM(require_src2());
 var import_path2 = require("path");
 var import_url = require("url");
+
+// src/encryption.ts
+var crypto = __toESM(require("crypto"));
+var AES_KEY_LENGTH = 32;
+var IV_LENGTH = 12;
+async function importPublicKey(publicKeyBase64) {
+  const keyBuffer = Buffer.from(publicKeyBase64, "base64");
+  const pemHeader = "-----BEGIN PUBLIC KEY-----\n";
+  const pemFooter = "\n-----END PUBLIC KEY-----";
+  const pemKey = pemHeader + keyBuffer.toString("base64").match(/.{1,64}/g).join("\n") + pemFooter;
+  return crypto.createPublicKey({
+    key: pemKey,
+    format: "pem",
+    type: "spki"
+  });
+}
+async function encryptContent(plaintext, publicKeyBase64) {
+  const aesKey = crypto.randomBytes(AES_KEY_LENGTH);
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv("aes-256-gcm", aesKey, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final()
+  ]);
+  const authTag = cipher.getAuthTag();
+  const encryptedContent = Buffer.concat([encrypted, authTag]);
+  const publicKey = await importPublicKey(publicKeyBase64);
+  const encryptedKey = crypto.publicEncrypt(
+    {
+      key: publicKey,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256"
+    },
+    aesKey
+  );
+  return {
+    encryptedContent: encryptedContent.toString("base64"),
+    encryptedKey: encryptedKey.toString("base64"),
+    iv: iv.toString("base64"),
+    version: 1
+  };
+}
+async function encryptSessionFields(data, publicKey) {
+  const result = {};
+  if (data.interactions && data.interactions.length > 0) {
+    const payload = await encryptContent(JSON.stringify(data.interactions), publicKey);
+    result.encryptedInteractions = JSON.stringify(payload);
+  }
+  if (data.todoSnapshots && data.todoSnapshots.length > 0) {
+    const payload = await encryptContent(JSON.stringify(data.todoSnapshots), publicKey);
+    result.encryptedTodoSnapshots = JSON.stringify(payload);
+  }
+  if (data.plans && data.plans.length > 0) {
+    const payload = await encryptContent(JSON.stringify(data.plans), publicKey);
+    result.encryptedPlans = JSON.stringify(payload);
+  }
+  if (data.subSessions && data.subSessions.length > 0) {
+    const payload = await encryptContent(JSON.stringify(data.subSessions), publicKey);
+    result.encryptedSubSessions = JSON.stringify(payload);
+  }
+  if (data.attachmentUrls && data.attachmentUrls.length > 0) {
+    const payload = await encryptContent(JSON.stringify(data.attachmentUrls), publicKey);
+    result.encryptedAttachmentUrls = JSON.stringify(payload);
+  }
+  return result;
+}
+async function isValidPublicKey(publicKeyBase64) {
+  if (!publicKeyBase64 || publicKeyBase64.length < 100) {
+    return false;
+  }
+  try {
+    await importPublicKey(publicKeyBase64);
+    return true;
+  } catch (error) {
+    logger.warn("Invalid public key format:", error);
+    return false;
+  }
+}
+
+// src/grpc-client.ts
 var __filename = (0, import_url.fileURLToPath)(import_meta.url);
 var __dirname2 = (0, import_path2.dirname)(__filename);
 var GrpcAPIClient = class {
@@ -31248,6 +31328,29 @@ var GrpcAPIClient = class {
     });
   }
   async upsertSession(sessionData) {
+    let publicKey = null;
+    let keyVersion = 0;
+    let encryptedFields = null;
+    try {
+      const keyData = await this.getUserPublicKey();
+      if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+        publicKey = keyData.publicKey;
+        keyVersion = keyData.keyVersion;
+        logger.info("Using personal encryption key for session data");
+      }
+      if (publicKey) {
+        encryptedFields = await encryptSessionFields({
+          interactions: sessionData.interactions,
+          todoSnapshots: sessionData.todo_snapshots,
+          plans: sessionData.plans,
+          subSessions: sessionData.sub_sessions,
+          attachmentUrls: sessionData.attachment_urls
+        }, publicKey);
+        logger.info("Session data encrypted successfully");
+      }
+    } catch (error) {
+      logger.warn("Failed to encrypt session data, sending plaintext:", error);
+    }
     return new Promise((resolve2, reject) => {
       const serializedMetadata = {};
       if (sessionData.metadata) {
@@ -31273,6 +31376,7 @@ var GrpcAPIClient = class {
       })) : [];
       const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
       const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0 ? JSON.stringify(sessionData.sub_sessions) : void 0;
+      const isEncrypted = encryptedFields !== null;
       const request = {
         project_name: sessionData.project_name,
         project_path: sessionData.project_path,
@@ -31286,11 +31390,29 @@ var GrpcAPIClient = class {
         output_tokens: sessionData.output_tokens || 0,
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
-        todo_snapshots: transformedTodoSnapshots,
-        plans: sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [],
-        attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [],
-        sub_sessions_json: subSessionsJson,
-        interactions: (sessionData.interactions || []).map((int) => {
+        metadata: serializedMetadata
+      };
+      if (isEncrypted) {
+        request.encryption_status = "encrypted";
+        request.encryption_version = keyVersion;
+        request.encrypted_interactions = encryptedFields.encryptedInteractions;
+        request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
+        request.encrypted_plans = encryptedFields.encryptedPlans;
+        request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
+        request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
+        request.todo_snapshots = [];
+        request.plans = [];
+        request.attachment_urls = [];
+        request.interactions = [];
+        request.sub_sessions_json = void 0;
+      } else {
+        request.encryption_status = "plaintext";
+        request.encryption_version = 0;
+        request.todo_snapshots = transformedTodoSnapshots;
+        request.plans = sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [];
+        request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [];
+        request.sub_sessions_json = subSessionsJson;
+        request.interactions = (sessionData.interactions || []).map((int) => {
           const serializedInteractionMetadata = {};
           if (int.metadata) {
             for (const [key, value] of Object.entries(int.metadata)) {
@@ -31314,9 +31436,8 @@ var GrpcAPIClient = class {
             input_tokens: int.input_tokens || 0,
             output_tokens: int.output_tokens || 0
           };
-        }),
-        metadata: serializedMetadata
-      };
+        });
+      }
       this.client.upsertSession(
         request,
         this.getMetadata(),
@@ -31328,7 +31449,8 @@ var GrpcAPIClient = class {
             return;
           }
           const action = response.was_updated ? "updated" : "created";
-          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)`);
+          const encryptionNote = isEncrypted ? " (encrypted)" : "";
+          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`);
           if (response.analysis_triggered) {
             logger.info("Analysis triggered based on user preferences");
           }
@@ -31583,6 +31705,33 @@ var GrpcAPIClient = class {
           resolve2({
             observations,
             totalCount: response.total_count || observations.length
+          });
+        }
+      );
+    });
+  }
+  /**
+   * Get the authenticated user's public key for encryption
+   * Used for personal (non-team) session encryption
+   */
+  async getUserPublicKey() {
+    return new Promise((resolve2, reject) => {
+      this.client.getUserPublicKey(
+        {},
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve2(null);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, "Get user public key")));
+            return;
+          }
+          resolve2({
+            publicKey: response.public_key,
+            keyVersion: response.key_version || 1
           });
         }
       );
