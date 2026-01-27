@@ -822,3 +822,30 @@ export function parseSessionLimitError(error: Error): SessionLimitError | null {
 export function isResourceExhaustedError(error: any): boolean {
   return error?.code === 8; // grpc.status.RESOURCE_EXHAUSTED = 8
 }
+
+// ============================================================================
+// Onboarding Error Handling Utilities
+// ============================================================================
+
+/**
+ * Parsed onboarding error information
+ */
+export interface OnboardingError {
+  type: 'onboarding_required';
+  message: string;
+}
+
+/**
+ * Parse an onboarding error from the backend
+ * Returns null if the error is not an onboarding error
+ */
+export function parseOnboardingError(error: Error): OnboardingError | null {
+  const message = error.message || '';
+  if (message.includes('no team found') || message.includes('complete onboarding')) {
+    return {
+      type: 'onboarding_required',
+      message: 'Please complete onboarding at https://sessionhub.dev to create or join a team',
+    };
+  }
+  return null;
+}

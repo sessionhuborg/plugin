@@ -31631,6 +31631,16 @@ function parseSessionLimitError(error) {
   }
   return null;
 }
+function parseOnboardingError(error) {
+  const message = error.message || "";
+  if (message.includes("no team found") || message.includes("complete onboarding")) {
+    return {
+      type: "onboarding_required",
+      message: "Please complete onboarding at https://sessionhub.dev to create or join a team"
+    };
+  }
+  return null;
+}
 
 // src/transcript-parser.ts
 var import_os2 = require("os");
@@ -32934,6 +32944,17 @@ program.command("capture").description("Capture a Claude Code session").option("
           currentCount: limitError.currentCount,
           limit: limitError.limit,
           upgradeUrl: limitError.upgradeUrl
+        };
+        console.log(JSON.stringify(output2, null, 2));
+        process.exit(1);
+      }
+      const onboardingError = parseOnboardingError(upsertError);
+      if (onboardingError) {
+        const output2 = {
+          success: false,
+          error: "onboarding_required",
+          message: onboardingError.message,
+          onboardingUrl: "https://sessionhub.dev/onboarding"
         };
         console.log(JSON.stringify(output2, null, 2));
         process.exit(1);

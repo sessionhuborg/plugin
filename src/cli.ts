@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import { ConfigManager } from './config.js';
-import { GrpcAPIClient, parseSessionLimitError } from './grpc-client.js';
+import { GrpcAPIClient, parseSessionLimitError, parseOnboardingError } from './grpc-client.js';
 import { TranscriptParser } from './transcript-parser.js';
 import { ProjectDetector } from './project-detector.js';
 import { logger } from './logger.js';
@@ -359,6 +359,20 @@ program
           console.log(JSON.stringify(output, null, 2));
           process.exit(1);
         }
+
+        // Check for onboarding error (user not in any team)
+        const onboardingError = parseOnboardingError(upsertError as Error);
+        if (onboardingError) {
+          const output = {
+            success: false,
+            error: 'onboarding_required',
+            message: onboardingError.message,
+            onboardingUrl: 'https://sessionhub.dev/onboarding',
+          };
+          console.log(JSON.stringify(output, null, 2));
+          process.exit(1);
+        }
+
         // Re-throw other errors
         throw upsertError;
       }
