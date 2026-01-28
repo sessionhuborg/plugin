@@ -24386,7 +24386,9 @@ var GrpcAPIClient = class {
             github_repo_owner: p.github_repo_owner,
             github_repo_id: p.github_repo_id,
             github_default_branch: p.github_default_branch,
-            github_connected_at: p.github_connected_at
+            github_connected_at: p.github_connected_at,
+            // Encryption mode: "enhanced" (default), "hybrid_e2e", or "full_e2e"
+            encryption_mode: p.encryption_mode || "enhanced"
           }));
           resolve(projects);
         }
@@ -24496,28 +24498,46 @@ var GrpcAPIClient = class {
     });
   }
   async upsertSession(sessionData) {
+    let encryptionMode = "enhanced";
+    try {
+      const projects = await this.getProjects();
+      const project = projects.find((p) => p.name === sessionData.project_name);
+      if (project) {
+        encryptionMode = project.encryption_mode || "enhanced";
+        logger.info(`Project encryption mode: ${encryptionMode}`);
+      } else {
+        logger.info("Project not found, will use default encryption mode (enhanced)");
+      }
+    } catch (error) {
+      logger.warn("Failed to fetch projects for encryption mode check, using enhanced:", error);
+    }
+    const shouldEncrypt = encryptionMode === "hybrid_e2e" || encryptionMode === "full_e2e";
     let publicKey = null;
     let keyVersion = 0;
     let encryptedFields = null;
-    try {
-      const keyData = await this.getUserPublicKey();
-      if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
-        publicKey = keyData.publicKey;
-        keyVersion = keyData.keyVersion;
-        logger.info("Using personal encryption key for session data");
+    if (shouldEncrypt) {
+      try {
+        const keyData = await this.getUserPublicKey();
+        if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+          publicKey = keyData.publicKey;
+          keyVersion = keyData.keyVersion;
+          logger.info(`Using personal encryption key for E2E mode: ${encryptionMode}`);
+          encryptedFields = await encryptSessionFields({
+            interactions: sessionData.interactions,
+            todoSnapshots: sessionData.todo_snapshots,
+            plans: sessionData.plans,
+            subSessions: sessionData.sub_sessions,
+            attachmentUrls: sessionData.attachment_urls
+          }, publicKey);
+          logger.info("Session data encrypted successfully");
+        } else {
+          logger.warn(`E2E encryption mode (${encryptionMode}) but no valid key - session will fail to decrypt`);
+        }
+      } catch (error) {
+        logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
       }
-      if (publicKey) {
-        encryptedFields = await encryptSessionFields({
-          interactions: sessionData.interactions,
-          todoSnapshots: sessionData.todo_snapshots,
-          plans: sessionData.plans,
-          subSessions: sessionData.sub_sessions,
-          attachmentUrls: sessionData.attachment_urls
-        }, publicKey);
-        logger.info("Session data encrypted successfully");
-      }
-    } catch (error) {
-      logger.warn("Failed to encrypt session data, sending plaintext:", error);
+    } else {
+      logger.info("Enhanced mode: sending plaintext (server handles encryption at rest)");
     }
     return new Promise((resolve, reject) => {
       const serializedMetadata = {};

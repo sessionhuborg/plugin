@@ -180,6 +180,8 @@ export class GrpcAPIClient {
             github_repo_id: p.github_repo_id,
             github_default_branch: p.github_default_branch,
             github_connected_at: p.github_connected_at,
+            // Encryption mode: "enhanced" (default), "hybrid_e2e", or "full_e2e"
+            encryption_mode: p.encryption_mode || 'enhanced',
           }));
 
           resolve(projects);
@@ -324,34 +326,60 @@ export class GrpcAPIClient {
     analysisTriggered: boolean;
     observationsTriggered: boolean;
   }> {
-    // Get encryption key (personal mode only for standalone plugin)
+    // STEP 1: Get the project to check its encryption mode
+    // Only encrypt for hybrid_e2e and full_e2e modes, NOT for enhanced mode
+    let encryptionMode = 'enhanced'; // Default to enhanced (no E2E encryption)
+
+    try {
+      const projects = await this.getProjects();
+      const project = projects.find((p: any) => p.name === sessionData.project_name);
+      if (project) {
+        encryptionMode = project.encryption_mode || 'enhanced';
+        logger.info(`Project encryption mode: ${encryptionMode}`);
+      } else {
+        // Project doesn't exist yet - will be created with default mode (enhanced)
+        logger.info('Project not found, will use default encryption mode (enhanced)');
+      }
+    } catch (error) {
+      logger.warn('Failed to fetch projects for encryption mode check, using enhanced:', error);
+    }
+
+    // STEP 2: Only encrypt for E2E modes (hybrid_e2e or full_e2e)
+    const shouldEncrypt = encryptionMode === 'hybrid_e2e' || encryptionMode === 'full_e2e';
     let publicKey: string | null = null;
     let keyVersion = 0;
     let encryptedFields: any = null;
 
-    try {
-      // Get user's public key for encryption
-      const keyData = await this.getUserPublicKey();
-      if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
-        publicKey = keyData.publicKey;
-        keyVersion = keyData.keyVersion;
-        logger.info('Using personal encryption key for session data');
-      }
+    if (shouldEncrypt) {
+      try {
+        // Get user's public key for encryption
+        const keyData = await this.getUserPublicKey();
+        if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+          publicKey = keyData.publicKey;
+          keyVersion = keyData.keyVersion;
+          logger.info(`Using personal encryption key for E2E mode: ${encryptionMode}`);
 
-      // Encrypt sensitive fields if we have a valid key
-      if (publicKey) {
-        encryptedFields = await encryptSessionFields({
-          interactions: sessionData.interactions,
-          todoSnapshots: sessionData.todo_snapshots,
-          plans: sessionData.plans,
-          subSessions: sessionData.sub_sessions,
-          attachmentUrls: sessionData.attachment_urls,
-        }, publicKey);
-        logger.info('Session data encrypted successfully');
+          // Encrypt sensitive fields
+          encryptedFields = await encryptSessionFields({
+            interactions: sessionData.interactions,
+            todoSnapshots: sessionData.todo_snapshots,
+            plans: sessionData.plans,
+            subSessions: sessionData.sub_sessions,
+            attachmentUrls: sessionData.attachment_urls,
+          }, publicKey);
+          logger.info('Session data encrypted successfully');
+        } else {
+          // E2E mode but no valid key - this is a problem
+          logger.warn(`E2E encryption mode (${encryptionMode}) but no valid key - session will fail to decrypt`);
+        }
+      } catch (error) {
+        // For E2E modes, encryption failure is more serious
+        logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
+        // Continue with plaintext but log the issue - backend may reject based on mode
       }
-    } catch (error) {
-      // Encryption failure shouldn't block session capture - log and continue with plaintext
-      logger.warn('Failed to encrypt session data, sending plaintext:', error);
+    } else {
+      // Enhanced mode: send plaintext (Supabase encrypts at rest automatically)
+      logger.info('Enhanced mode: sending plaintext (server handles encryption at rest)');
     }
 
     return new Promise((resolve, reject) => {

@@ -118,6 +118,12 @@ message Project {
   optional string github_repo_id = 14;
   optional string github_default_branch = 15;
   optional string github_connected_at = 16;
+
+  // Encryption mode: "enhanced" (default), "hybrid_e2e", or "full_e2e"
+  // - enhanced: Server-side encryption at rest, full AI features
+  // - hybrid_e2e: E2E encrypted storage, on-demand AI analysis (user triggers)
+  // - full_e2e: E2E encrypted storage, no AI features
+  string encryption_mode = 17;
 }
 
 // ============================================================================
