@@ -218,6 +218,7 @@ export class TranscriptParser {
     try {
       const fs = await import('fs/promises');
       const path = await import('path');
+      const os = await import('os');
 
       // Check file size before loading to prevent OOM on very large files
       const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB limit
@@ -259,6 +260,79 @@ export class TranscriptParser {
       const plans: Array<{timestamp: string; plan: string}> = [];
       const todoSnapshots: Array<{timestamp: string; todos: any[]}> = [];
       const attachmentUrls: AttachmentMetadata[] = [];
+
+      // Plan file extraction variables
+      let planFileSlug: string | undefined;
+      let planFilePath: string | undefined;
+      let planFileContent: string | undefined;
+      let planFileModifiedAt: string | undefined;
+
+      // STEP 1: Extract slug from transcript entries to locate plan file
+      // The slug field may not be in the first entry (e.g., file-history-snapshot doesn't have it)
+      // Search through entries until we find one with a slug
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.slug) {
+            planFileSlug = entry.slug;
+            planFilePath = path.join(os.homedir(), '.claude', 'plans', `${planFileSlug}.md`);
+
+            // Read plan file if it exists
+            try {
+              const planStats = await fs.stat(planFilePath);
+              planFileContent = await fs.readFile(planFilePath, 'utf-8');
+              planFileModifiedAt = planStats.mtime.toISOString();
+              logger.info(`Found plan file: ${planFilePath} (slug: ${planFileSlug})`);
+            } catch {
+              // Plan file doesn't exist - session may not have used plan mode
+              logger.debug(`No plan file found at ${planFilePath}`);
+            }
+            break; // Found slug, stop searching
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      // STEP 2: Search for inherited/teleported plan references in content
+      // Pattern: Look for explicit plan file paths in system messages
+      // This catches plans inherited from other sessions via teleportation
+      if (!planFileContent) {
+        const planPathPattern = /\/\.claude\/plans\/([\w-]+)\.md/g;
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            const contentStr = JSON.stringify(entry);
+            const matches = [...contentStr.matchAll(planPathPattern)];
+
+            for (const match of matches) {
+              const inheritedSlug = match[1];
+              if (inheritedSlug && inheritedSlug !== planFileSlug) {
+                // Found a reference to a different plan file (inherited/teleported)
+                const inheritedPlanPath = path.join(os.homedir(), '.claude', 'plans', `${inheritedSlug}.md`);
+                try {
+                  const inheritedStats = await fs.stat(inheritedPlanPath);
+                  const inheritedContent = await fs.readFile(inheritedPlanPath, 'utf-8');
+
+                  // Use this inherited plan if we don't have one yet
+                  planFileSlug = inheritedSlug;
+                  planFilePath = inheritedPlanPath;
+                  planFileContent = inheritedContent;
+                  planFileModifiedAt = inheritedStats.mtime.toISOString();
+                  logger.info(`Found inherited plan file: ${inheritedPlanPath} (slug: ${inheritedSlug})`);
+                  break; // Use first found inherited plan
+                } catch {
+                  // Inherited plan file doesn't exist on disk
+                  logger.debug(`Inherited plan file not found: ${inheritedPlanPath}`);
+                }
+              }
+            }
+            if (planFileContent) break; // Stop searching if we found one
+          } catch {
+            continue;
+          }
+        }
+      }
 
       for (const line of lines) {
         try {
@@ -723,6 +797,11 @@ export class TranscriptParser {
         plans,
         attachmentUrls,
         agentIdMap,
+        // Plan file metadata
+        planFileSlug,
+        planFilePath,
+        planFileContent,
+        planFileModifiedAt,
       };
     } catch (error) {
       logger.debug(`Failed to parse transcript file: ${error instanceof Error ? error.message : error}`);

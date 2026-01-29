@@ -34,6 +34,9 @@ service SessionHubService {
   // Attachment storage
   rpc UploadAttachment(UploadAttachmentRequest) returns (UploadAttachmentResponse);
 
+  // Plan file storage (uploads plan .md files to team-based storage)
+  rpc UploadPlanFile(UploadPlanFileRequest) returns (UploadPlanFileResponse);
+
   // Session quota for free tier limit enforcement
   rpc GetSessionQuota(GetSessionQuotaRequest) returns (GetSessionQuotaResponse);
 
@@ -148,7 +151,7 @@ message CreateSessionRequest {
 
   // Structured data
   repeated TodoSnapshot todo_snapshots = 12;
-  repeated Plan plans = 13;
+  repeated Plan plans = 13;  // DEPRECATED: Plans now stored in Supabase Storage. Kept for backwards compatibility.
   repeated AttachmentMetadata attachment_urls = 14;
   repeated InteractionData interactions = 15;
   map<string, string> metadata = 16;
@@ -162,9 +165,13 @@ message CreateSessionRequest {
   // These contain EncryptedPayload JSON: {encryptedContent, encryptedKey, iv, version}
   optional string encrypted_interactions = 21;
   optional string encrypted_todo_snapshots = 22;
-  optional string encrypted_plans = 23;
+  optional string encrypted_plans = 23;  // DEPRECATED: Kept for backwards compatibility
   optional string encrypted_sub_sessions = 24;
   optional string encrypted_attachment_urls = 25;
+
+  // Plan slug - path is derived as {teamId}/plans/{sessionId}/{slug}.md
+  // Plan file content is uploaded separately via UploadPlanFile RPC
+  optional string plan_slug = 26;
 }
 
 message CreateSessionResponse {
@@ -346,6 +353,21 @@ message UploadAttachmentResponse {
   string storage_path = 2;          // Path in storage bucket
   string public_url = 3;            // Public URL to access the file
   string error = 4;                 // Error message if failed
+}
+
+// ============================================================================
+// Plan File Storage Messages
+// ============================================================================
+
+message UploadPlanFileRequest {
+  string session_id = 1;            // Session ID to associate the plan with
+  string slug = 2;                  // Plan slug (e.g., "purrfect-sleeping-wozniak")
+  bytes file_data = 3;              // Raw MD file content as bytes
+}
+
+message UploadPlanFileResponse {
+  bool success = 1;
+  string error = 2;                 // Error message if failed
 }
 
 // ============================================================================

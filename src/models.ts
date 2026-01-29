@@ -80,6 +80,10 @@ export interface SessionApiData {
     tool_name: string;
     metadata: Record<string, any>;
   }>;
+
+  // Plan slug - plan content is uploaded separately via UploadPlanFile RPC
+  // Path is derived as {teamId}/plans/{sessionId}/{slug}.md
+  plan_slug?: string;
 }
 
 export interface ApiInteractionData {
@@ -149,6 +153,12 @@ export interface EnhancedSessionData {
     taskPrompt: string | null;
   }>;
   subSessions?: SubSessionData[];
+
+  // Plan file metadata (from ~/.claude/plans/{slug}.md)
+  planFileSlug?: string;       // The slug extracted from transcript entries (e.g., "purrfect-sleeping-wozniak")
+  planFilePath?: string;       // Full path to the plan file
+  planFileContent?: string;    // Actual content read from disk (final state)
+  planFileModifiedAt?: string; // Last modified timestamp of the plan file
 }
 
 export interface SubSessionData {

@@ -328,6 +328,8 @@ program
         attachment_urls: sessionData.attachmentUrls || [],
         sub_sessions: subSessions,
         interactions: sessionData.interactions || [],
+        // Plan slug - content is uploaded separately via UploadPlanFile RPC
+        plan_slug: sessionData.planFileSlug,
         metadata: {
           import_source: 'cli',
           original_session_id: sessionData.sessionId,
@@ -382,6 +384,28 @@ program
         process.exit(1);
       }
 
+      // Upload plan file to storage if available
+      // Storage path: {teamId}/plans/{sessionId}/{slug}.md
+      let planFileUploaded = false;
+      if (sessionData.planFileSlug && sessionData.planFileContent) {
+        try {
+          const planResult = await client.uploadPlanFile(
+            result.sessionId,
+            sessionData.planFileSlug,
+            sessionData.planFileContent
+          );
+          if (planResult.success) {
+            logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
+            planFileUploaded = true;
+          } else {
+            logger.warn(`Plan file upload failed: ${planResult.error}`);
+          }
+        } catch (uploadError) {
+          logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+          // Don't fail the entire capture if plan upload fails
+        }
+      }
+
       // Save last session info for /observations command (atomic write to prevent corruption)
       const lastSessionFile = join(CONFIG_DIR, 'last-session.json');
       const tempFile = `${lastSessionFile}.${process.pid}.tmp`;
@@ -416,6 +440,8 @@ program
         newInteractionsCount: result.newInteractionsCount,
         analysisTriggered: (result as any).analysisTriggered || false,
         observationsTriggered: (result as any).observationsTriggered || false,
+        planFileUploaded,
+        planSlug: sessionData.planFileSlug || null,
         projectName,
         sessionName: finalSessionName,
         transcriptFile: basename(targetFile),
@@ -548,6 +574,10 @@ program
             plans: sessionData.plans || [],
             attachment_urls: sessionData.attachmentUrls || [],
             interactions: sessionData.interactions || [],
+            // Plan file metadata (from ~/.claude/plans/{slug}.md)
+            plan_file_slug: sessionData.planFileSlug,
+            plan_file_content: sessionData.planFileContent,
+            plan_file_modified_at: sessionData.planFileModifiedAt,
             metadata: {
               import_source: 'cli_bulk',
               original_session_id: sessionData.sessionId,

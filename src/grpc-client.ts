@@ -19,6 +19,8 @@ export class GrpcAPIClient {
   private client: any;
   private apiKey: string;
   private backendUrl: string;
+  private teamKeyCache: { teamId: string; publicKey: string; keyVersion: number; fetchedAt: number } | null = null;
+  private teamKeyCacheTtlMs = 5 * 60 * 1000;
 
   constructor(apiKey: string, backendUrl: string = 'localhost:50051', useTls?: boolean) {
     this.apiKey = apiKey;
@@ -352,13 +354,23 @@ export class GrpcAPIClient {
 
     if (shouldEncrypt) {
       try {
-        // Get user's public key for encryption
-        const keyData = await this.getUserPublicKey();
-        if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
-          publicKey = keyData.publicKey;
-          keyVersion = keyData.keyVersion;
-          logger.info(`Using personal encryption key for E2E mode: ${encryptionMode}`);
+        // Prefer team public key for E2E encryption
+        const teamKeyData = await this.getPrimaryTeamKey();
+        if (teamKeyData?.publicKey && await isValidPublicKey(teamKeyData.publicKey)) {
+          publicKey = teamKeyData.publicKey;
+          keyVersion = teamKeyData.keyVersion;
+          logger.info(`Using team encryption key for E2E mode: ${encryptionMode}`);
+        } else {
+          // Fallback to user's key for legacy personal sessions
+          const keyData = await this.getUserPublicKey();
+          if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+            publicKey = keyData.publicKey;
+            keyVersion = keyData.keyVersion;
+            logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
+          }
+        }
 
+        if (publicKey) {
           // Encrypt sensitive fields
           encryptedFields = await encryptSessionFields({
             interactions: sessionData.interactions,
@@ -434,6 +446,8 @@ export class GrpcAPIClient {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         metadata: serializedMetadata,
+        // Plan slug - content is uploaded separately via UploadPlanFile RPC
+        plan_slug: sessionData.plan_slug,
       };
 
       if (isEncrypted) {
@@ -766,6 +780,49 @@ export class GrpcAPIClient {
   }
 
   /**
+   * Upload a plan file to storage
+   * Storage path: {teamId}/plans/{sessionId}/{slug}.md
+   */
+  async uploadPlanFile(
+    sessionId: string,
+    slug: string,
+    content: string
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    return new Promise((resolve, reject) => {
+      // Convert string content to bytes (Buffer)
+      const fileData = Buffer.from(content, 'utf-8');
+
+      this.client.uploadPlanFile(
+        {
+          session_id: sessionId,
+          slug: slug,
+          file_data: fileData,
+        },
+        this.getMetadata(),
+        { deadline: this.getDeadline(60) }, // Longer timeout for file uploads
+        (error: grpc.ServiceError | null, response: any) => {
+          if (error) {
+            // For upload failures, resolve with error info instead of rejecting
+            // This allows callers to handle failures gracefully
+            resolve({ success: false, error: error.message });
+            return;
+          }
+
+          if (!response.success) {
+            resolve({ success: false, error: response.error });
+            return;
+          }
+
+          resolve({ success: true });
+        }
+      );
+    });
+  }
+
+  /**
    * Get project observations for context injection
    */
   async getProjectObservations(projectId: string, limit?: number): Promise<{
@@ -830,7 +887,7 @@ export class GrpcAPIClient {
 
   /**
    * Get the authenticated user's public key for encryption
-   * Used for personal (non-team) session encryption
+   * Used for personal (non-team) session encryption or legacy fallback
    */
   async getUserPublicKey(): Promise<{
     publicKey: string;
@@ -859,6 +916,109 @@ export class GrpcAPIClient {
         }
       );
     });
+  }
+
+  private isTeamKeyCacheFresh(): boolean {
+    if (!this.teamKeyCache) {
+      return false;
+    }
+
+    return Date.now() - this.teamKeyCache.fetchedAt < this.teamKeyCacheTtlMs;
+  }
+
+  async listUserTeams(): Promise<Array<{ id: string; name?: string; slug?: string }>> {
+    return new Promise((resolve, reject) => {
+      this.client.listUserTeams(
+        {},
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error: grpc.ServiceError | null, response: any) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve([]);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, 'List user teams')));
+            return;
+          }
+
+          const teams = (response.teams || []).map((team: any) => ({
+            id: team.id,
+            name: team.name,
+            slug: team.slug,
+          }));
+
+          resolve(teams);
+        }
+      );
+    });
+  }
+
+  async getTeamPublicKey(teamId: string): Promise<{
+    publicKey: string;
+    keyVersion: number;
+  } | null> {
+    return new Promise((resolve, reject) => {
+      this.client.getTeamPublicKey(
+        { team_id: teamId },
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error: grpc.ServiceError | null, response: any) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve(null);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, 'Get team public key')));
+            return;
+          }
+
+          resolve({
+            publicKey: response.public_key,
+            keyVersion: response.key_version || 1,
+          });
+        }
+      );
+    });
+  }
+
+  private async getPrimaryTeamKey(): Promise<{
+    teamId: string;
+    publicKey: string;
+    keyVersion: number;
+  } | null> {
+    if (this.isTeamKeyCacheFresh()) {
+      return this.teamKeyCache;
+    }
+
+    try {
+      const teams = await this.listUserTeams();
+      if (!teams.length) {
+        return null;
+      }
+
+      if (teams.length > 1) {
+        logger.warn(`Multiple teams detected (${teams.length}). Using the first team for encryption.`);
+      }
+
+      const teamId = teams[0].id;
+      const keyData = await this.getTeamPublicKey(teamId);
+      if (!keyData?.publicKey) {
+        return null;
+      }
+
+      this.teamKeyCache = {
+        teamId,
+        publicKey: keyData.publicKey,
+        keyVersion: keyData.keyVersion,
+        fetchedAt: Date.now(),
+      };
+
+      return this.teamKeyCache;
+    } catch (error) {
+      logger.warn('Failed to resolve team encryption key:', error);
+      return null;
+    }
   }
 
   /**

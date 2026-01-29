@@ -24578,7 +24578,11 @@ var GrpcAPIClient = class {
         output_tokens: sessionData.output_tokens || 0,
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
-        metadata: serializedMetadata
+        metadata: serializedMetadata,
+        // Plan file metadata (from ~/.claude/plans/{slug}.md)
+        plan_file_slug: sessionData.plan_file_slug,
+        plan_file_content: sessionData.plan_file_content,
+        plan_file_modified_at: sessionData.plan_file_modified_at
       };
       if (isEncrypted) {
         request.encryption_status = "encrypted";
