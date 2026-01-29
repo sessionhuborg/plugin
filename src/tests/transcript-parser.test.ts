@@ -5,6 +5,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import path from 'path';
+import os from 'os';
 import { TranscriptParser } from '../transcript-parser.js';
 
 // Mock fs/promises
@@ -557,6 +559,101 @@ describe('TranscriptParser', () => {
       expect(result?.plans?.[0].plan).toContain('Create component');
       expect(result?.planningModeInfo?.hasPlanningMode).toBe(true);
       expect(result?.planningModeInfo?.planningCycles).toBe(1);
+    });
+
+    it('should not set planFileSlug when plan file is missing', async () => {
+      const fs = await import('fs/promises');
+
+      const transcriptPath = '/path/to/session.jsonl';
+      const slug = 'missing-plan';
+      const planPath = path.join(os.homedir(), '.claude', 'plans', `${slug}.md`);
+
+      vi.mocked(fs.stat).mockImplementation(async (filePath: any) => {
+        const p = String(filePath);
+        if (p === transcriptPath) {
+          return { size: 1000 } as any;
+        }
+        if (p === planPath) {
+          throw new Error('ENOENT');
+        }
+        return { size: 1000 } as any;
+      });
+
+      const jsonlLines = [
+        JSON.stringify({
+          sessionId: 'session-missing-plan',
+          timestamp: '2024-01-15T10:00:00.000Z',
+          slug,
+          type: 'user',
+          message: { role: 'user', content: 'Plan the feature' },
+        }),
+      ];
+
+      vi.mocked(fs.readFile).mockImplementation(async (filePath: any) => {
+        if (String(filePath) === transcriptPath) {
+          return jsonlLines.join('\n');
+        }
+        throw new Error('Unexpected read');
+      });
+
+      const result = await parser.parseTranscriptFile(transcriptPath);
+
+      expect(result?.planFileSlug).toBeUndefined();
+      expect(result?.planFileContent).toBeUndefined();
+    });
+
+    it('should use inherited plan path when session slug file is missing', async () => {
+      const fs = await import('fs/promises');
+
+      const transcriptPath = '/path/to/session.jsonl';
+      const slug = 'missing-plan';
+      const inheritedSlug = 'inherited-plan';
+      const planPath = path.join(os.homedir(), '.claude', 'plans', `${inheritedSlug}.md`);
+
+      vi.mocked(fs.stat).mockImplementation(async (filePath: any) => {
+        const p = String(filePath);
+        if (p === transcriptPath) {
+          return { size: 1000 } as any;
+        }
+        if (p === planPath) {
+          return { size: 42, mtime: new Date('2024-01-15T10:00:10.000Z') } as any;
+        }
+        throw new Error('ENOENT');
+      });
+
+      const jsonlLines = [
+        JSON.stringify({
+          sessionId: 'session-inherited-plan',
+          timestamp: '2024-01-15T10:00:00.000Z',
+          slug,
+          type: 'user',
+          message: { role: 'user', content: 'Plan the feature' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: '2024-01-15T10:00:05.000Z',
+          message: {
+            role: 'assistant',
+            content: `Use plan at /Users/vlad/.claude/plans/${inheritedSlug}.md`,
+          },
+        }),
+      ];
+
+      vi.mocked(fs.readFile).mockImplementation(async (filePath: any) => {
+        const p = String(filePath);
+        if (p === transcriptPath) {
+          return jsonlLines.join('\n');
+        }
+        if (p === planPath) {
+          return '# Inherited Plan\n\nDo the thing.';
+        }
+        throw new Error('Unexpected read');
+      });
+
+      const result = await parser.parseTranscriptFile(transcriptPath);
+
+      expect(result?.planFileSlug).toBe(inheritedSlug);
+      expect(result?.planFileContent).toContain('Inherited Plan');
     });
   });
 

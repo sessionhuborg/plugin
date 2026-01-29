@@ -31084,6 +31084,8 @@ var GrpcAPIClient = class {
   client;
   apiKey;
   backendUrl;
+  teamKeyCache = null;
+  teamKeyCacheTtlMs = 5 * 60 * 1e3;
   constructor(apiKey, backendUrl = "localhost:50051", useTls) {
     this.apiKey = apiKey;
     const isLocalhost = backendUrl.startsWith("localhost") || backendUrl.startsWith("127.0.0.1");
@@ -31349,11 +31351,20 @@ var GrpcAPIClient = class {
     let encryptedFields = null;
     if (shouldEncrypt) {
       try {
-        const keyData = await this.getUserPublicKey();
-        if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
-          publicKey = keyData.publicKey;
-          keyVersion = keyData.keyVersion;
-          logger.info(`Using personal encryption key for E2E mode: ${encryptionMode}`);
+        const teamKeyData = await this.getPrimaryTeamKey();
+        if (teamKeyData?.publicKey && await isValidPublicKey(teamKeyData.publicKey)) {
+          publicKey = teamKeyData.publicKey;
+          keyVersion = teamKeyData.keyVersion;
+          logger.info(`Using team encryption key for E2E mode: ${encryptionMode}`);
+        } else {
+          const keyData = await this.getUserPublicKey();
+          if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+            publicKey = keyData.publicKey;
+            keyVersion = keyData.keyVersion;
+            logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
+          }
+        }
+        if (publicKey) {
           encryptedFields = await encryptSessionFields({
             interactions: sessionData.interactions,
             todoSnapshots: sessionData.todo_snapshots,
@@ -31411,10 +31422,8 @@ var GrpcAPIClient = class {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         metadata: serializedMetadata,
-        // Plan file metadata (from ~/.claude/plans/{slug}.md)
-        plan_file_slug: sessionData.plan_file_slug,
-        plan_file_content: sessionData.plan_file_content,
-        plan_file_modified_at: sessionData.plan_file_modified_at
+        // Plan slug - content is uploaded separately via UploadPlanFile RPC
+        plan_slug: sessionData.plan_slug
       };
       if (isEncrypted) {
         request.encryption_status = "encrypted";
@@ -31692,6 +31701,36 @@ var GrpcAPIClient = class {
     });
   }
   /**
+   * Upload a plan file to storage
+   * Storage path: {teamId}/plans/{sessionId}/{slug}.md
+   */
+  async uploadPlanFile(sessionId, slug, content) {
+    return new Promise((resolve2, reject) => {
+      const fileData = Buffer.from(content, "utf-8");
+      this.client.uploadPlanFile(
+        {
+          session_id: sessionId,
+          slug,
+          file_data: fileData
+        },
+        this.getMetadata(),
+        { deadline: this.getDeadline(60) },
+        // Longer timeout for file uploads
+        (error, response) => {
+          if (error) {
+            resolve2({ success: false, error: error.message });
+            return;
+          }
+          if (!response.success) {
+            resolve2({ success: false, error: response.error });
+            return;
+          }
+          resolve2({ success: true });
+        }
+      );
+    });
+  }
+  /**
    * Get project observations for context injection
    */
   async getProjectObservations(projectId, limit) {
@@ -31736,7 +31775,7 @@ var GrpcAPIClient = class {
   }
   /**
    * Get the authenticated user's public key for encryption
-   * Used for personal (non-team) session encryption
+   * Used for personal (non-team) session encryption or legacy fallback
    */
   async getUserPublicKey() {
     return new Promise((resolve2, reject) => {
@@ -31760,6 +31799,89 @@ var GrpcAPIClient = class {
         }
       );
     });
+  }
+  isTeamKeyCacheFresh() {
+    if (!this.teamKeyCache) {
+      return false;
+    }
+    return Date.now() - this.teamKeyCache.fetchedAt < this.teamKeyCacheTtlMs;
+  }
+  async listUserTeams() {
+    return new Promise((resolve2, reject) => {
+      this.client.listUserTeams(
+        {},
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve2([]);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, "List user teams")));
+            return;
+          }
+          const teams = (response.teams || []).map((team) => ({
+            id: team.id,
+            name: team.name,
+            slug: team.slug
+          }));
+          resolve2(teams);
+        }
+      );
+    });
+  }
+  async getTeamPublicKey(teamId) {
+    return new Promise((resolve2, reject) => {
+      this.client.getTeamPublicKey(
+        { team_id: teamId },
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve2(null);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, "Get team public key")));
+            return;
+          }
+          resolve2({
+            publicKey: response.public_key,
+            keyVersion: response.key_version || 1
+          });
+        }
+      );
+    });
+  }
+  async getPrimaryTeamKey() {
+    if (this.isTeamKeyCacheFresh()) {
+      return this.teamKeyCache;
+    }
+    try {
+      const teams = await this.listUserTeams();
+      if (!teams.length) {
+        return null;
+      }
+      if (teams.length > 1) {
+        logger.warn(`Multiple teams detected (${teams.length}). Using the first team for encryption.`);
+      }
+      const teamId = teams[0].id;
+      const keyData = await this.getTeamPublicKey(teamId);
+      if (!keyData?.publicKey) {
+        return null;
+      }
+      this.teamKeyCache = {
+        teamId,
+        publicKey: keyData.publicKey,
+        keyVersion: keyData.keyVersion,
+        fetchedAt: Date.now()
+      };
+      return this.teamKeyCache;
+    } catch (error) {
+      logger.warn("Failed to resolve team encryption key:", error);
+      return null;
+    }
   }
   /**
    * Get session quota information for the current user
@@ -33153,10 +33275,8 @@ program.command("capture").description("Capture a Claude Code session").option("
       attachment_urls: sessionData.attachmentUrls || [],
       sub_sessions: subSessions,
       interactions: sessionData.interactions || [],
-      // Plan file metadata (from ~/.claude/plans/{slug}.md)
-      plan_file_slug: sessionData.planFileSlug,
-      plan_file_content: sessionData.planFileContent,
-      plan_file_modified_at: sessionData.planFileModifiedAt,
+      // Plan slug - content is uploaded separately via UploadPlanFile RPC
+      plan_slug: sessionData.planFileSlug,
       metadata: {
         import_source: "cli",
         original_session_id: sessionData.sessionId,
@@ -33203,6 +33323,24 @@ program.command("capture").description("Capture a Claude Code session").option("
       console.error("Error: Failed to create session");
       process.exit(1);
     }
+    let planFileUploaded = false;
+    if (sessionData.planFileSlug && sessionData.planFileContent) {
+      try {
+        const planResult = await client.uploadPlanFile(
+          result.sessionId,
+          sessionData.planFileSlug,
+          sessionData.planFileContent
+        );
+        if (planResult.success) {
+          logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
+          planFileUploaded = true;
+        } else {
+          logger.warn(`Plan file upload failed: ${planResult.error}`);
+        }
+      } catch (uploadError) {
+        logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+      }
+    }
     const lastSessionFile = (0, import_path4.join)(CONFIG_DIR, "last-session.json");
     const tempFile = `${lastSessionFile}.${process.pid}.tmp`;
     try {
@@ -33227,6 +33365,8 @@ program.command("capture").description("Capture a Claude Code session").option("
       newInteractionsCount: result.newInteractionsCount,
       analysisTriggered: result.analysisTriggered || false,
       observationsTriggered: result.observationsTriggered || false,
+      planFileUploaded,
+      planSlug: sessionData.planFileSlug || null,
       projectName,
       sessionName: finalSessionName,
       transcriptFile: (0, import_path4.basename)(targetFile),

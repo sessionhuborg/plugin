@@ -446,9 +446,11 @@ export class GrpcAPIClient {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         metadata: serializedMetadata,
-        // Plan slug - content is uploaded separately via UploadPlanFile RPC
-        plan_slug: sessionData.plan_slug,
       };
+      // Plan slug - content is uploaded separately via UploadPlanFile RPC
+      if (sessionData.plan_slug) {
+        request.plan_slug = sessionData.plan_slug;
+      }
 
       if (isEncrypted) {
         // Send encrypted data

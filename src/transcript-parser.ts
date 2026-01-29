@@ -269,25 +269,28 @@ export class TranscriptParser {
 
       // STEP 1: Extract slug from transcript entries to locate plan file
       // The slug field may not be in the first entry (e.g., file-history-snapshot doesn't have it)
-      // Search through entries until we find one with a slug
+      // Search through entries until we find a slug with an existing plan file
+      let slugCandidate: string | undefined;
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
-          if (entry.slug) {
-            planFileSlug = entry.slug;
-            planFilePath = path.join(os.homedir(), '.claude', 'plans', `${planFileSlug}.md`);
+          if (entry.slug && entry.slug !== slugCandidate) {
+            slugCandidate = entry.slug;
+            const candidatePath = path.join(os.homedir(), '.claude', 'plans', `${slugCandidate}.md`);
 
             // Read plan file if it exists
             try {
-              const planStats = await fs.stat(planFilePath);
-              planFileContent = await fs.readFile(planFilePath, 'utf-8');
+              const planStats = await fs.stat(candidatePath);
+              planFileSlug = slugCandidate;
+              planFilePath = candidatePath;
+              planFileContent = await fs.readFile(candidatePath, 'utf-8');
               planFileModifiedAt = planStats.mtime.toISOString();
-              logger.info(`Found plan file: ${planFilePath} (slug: ${planFileSlug})`);
+              logger.info(`Found plan file: ${candidatePath} (slug: ${planFileSlug})`);
+              break; // Found valid plan file, stop searching
             } catch {
               // Plan file doesn't exist - session may not have used plan mode
-              logger.debug(`No plan file found at ${planFilePath}`);
+              logger.debug(`No plan file found at ${candidatePath} (slug: ${slugCandidate})`);
             }
-            break; // Found slug, stop searching
           }
         } catch {
           continue;

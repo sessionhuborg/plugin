@@ -328,8 +328,6 @@ program
         attachment_urls: sessionData.attachmentUrls || [],
         sub_sessions: subSessions,
         interactions: sessionData.interactions || [],
-        // Plan slug - content is uploaded separately via UploadPlanFile RPC
-        plan_slug: sessionData.planFileSlug,
         metadata: {
           import_source: 'cli',
           original_session_id: sessionData.sessionId,
@@ -441,7 +439,7 @@ program
         analysisTriggered: (result as any).analysisTriggered || false,
         observationsTriggered: (result as any).observationsTriggered || false,
         planFileUploaded,
-        planSlug: sessionData.planFileSlug || null,
+        planSlug: planFileUploaded ? (sessionData.planFileSlug || null) : null,
         projectName,
         sessionName: finalSessionName,
         transcriptFile: basename(targetFile),
@@ -574,10 +572,6 @@ program
             plans: sessionData.plans || [],
             attachment_urls: sessionData.attachmentUrls || [],
             interactions: sessionData.interactions || [],
-            // Plan file metadata (from ~/.claude/plans/{slug}.md)
-            plan_file_slug: sessionData.planFileSlug,
-            plan_file_content: sessionData.planFileContent,
-            plan_file_modified_at: sessionData.planFileModifiedAt,
             metadata: {
               import_source: 'cli_bulk',
               original_session_id: sessionData.sessionId,
@@ -587,6 +581,24 @@ program
           const result = await client.upsertSession(apiSessionData);
 
           if (result.sessionId) {
+            // Upload plan file to storage if available
+            if (sessionData.planFileSlug && sessionData.planFileContent) {
+              try {
+                const planResult = await client.uploadPlanFile(
+                  result.sessionId,
+                  sessionData.planFileSlug,
+                  sessionData.planFileContent
+                );
+                if (planResult.success) {
+                  logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
+                } else {
+                  logger.warn(`Plan file upload failed: ${planResult.error}`);
+                }
+              } catch (uploadError) {
+                logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+              }
+            }
+
             successCount++;
             results.push({ file: fileName, success: true, sessionId: result.sessionId });
           } else {
