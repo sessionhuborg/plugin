@@ -32134,6 +32134,8 @@ var TranscriptParser = class {
       const plans = [];
       const todoSnapshots = [];
       const attachmentUrls = [];
+      const taskMap = /* @__PURE__ */ new Map();
+      const pendingTaskCreates = /* @__PURE__ */ new Map();
       let planFileSlug;
       let planFilePath;
       let planFileContent;
@@ -32251,6 +32253,32 @@ var TranscriptParser = class {
             if (Array.isArray(entry.message.content)) {
               for (const contentItem of entry.message.content) {
                 if (contentItem.type === "tool_result" && contentItem.tool_use_id) {
+                  const pendingCreate = pendingTaskCreates.get(contentItem.tool_use_id);
+                  if (pendingCreate) {
+                    const resultContent = Array.isArray(contentItem.content) ? contentItem.content.map((c) => c.text || c || "").join("") : contentItem.content || "";
+                    const taskIdMatch = resultContent.match(/Task #(\d+)/i);
+                    if (taskIdMatch) {
+                      const taskId = taskIdMatch[1];
+                      taskMap.set(taskId, {
+                        subject: pendingCreate.subject,
+                        description: pendingCreate.description,
+                        activeForm: pendingCreate.activeForm,
+                        status: "pending",
+                        createdAt: pendingCreate.timestamp
+                      });
+                      const tasksArray = Array.from(taskMap.values()).map((t) => ({
+                        content: t.subject,
+                        status: t.status,
+                        activeForm: t.activeForm
+                      }));
+                      todoSnapshots.push({
+                        timestamp: entry.timestamp,
+                        todos: tasksArray
+                      });
+                      logger.debug(`Captured TaskCreate: Task #${taskId} - ${pendingCreate.subject}`);
+                    }
+                    pendingTaskCreates.delete(contentItem.tool_use_id);
+                  }
                   const toolCall = toolCallMap.get(contentItem.tool_use_id);
                   if (toolCall) {
                     const toolName = toolCall.metadata.tool_name;
@@ -32359,6 +32387,11 @@ var TranscriptParser = class {
                       timestamp: entry.timestamp,
                       plan: item.input.plan
                     });
+                  } else if (planFileContent) {
+                    plans.push({
+                      timestamp: entry.timestamp,
+                      plan: planFileContent
+                    });
                   }
                 }
                 if (item.type === "tool_use" && item.name === "TodoWrite" && item.input?.todos && Array.isArray(item.input.todos)) {
@@ -32366,6 +32399,44 @@ var TranscriptParser = class {
                     timestamp: entry.timestamp,
                     todos: item.input.todos
                   });
+                }
+                if (item.type === "tool_use" && item.name === "TaskCreate" && item.id) {
+                  const input = item.input || {};
+                  pendingTaskCreates.set(item.id, {
+                    subject: input.subject || "",
+                    description: input.description || "",
+                    activeForm: input.activeForm || "",
+                    timestamp: entry.timestamp
+                  });
+                }
+                if (item.type === "tool_use" && item.name === "TaskUpdate") {
+                  const input = item.input || {};
+                  const taskId = input.taskId;
+                  if (taskId && taskMap.has(taskId)) {
+                    const task = taskMap.get(taskId);
+                    if (input.status) {
+                      task.status = input.status;
+                    }
+                    if (input.subject) {
+                      task.subject = input.subject;
+                    }
+                    if (input.description) {
+                      task.description = input.description;
+                    }
+                    if (input.activeForm) {
+                      task.activeForm = input.activeForm;
+                    }
+                    taskMap.set(taskId, task);
+                    const tasksArray = Array.from(taskMap.values()).map((t) => ({
+                      content: t.subject,
+                      status: t.status,
+                      activeForm: t.activeForm
+                    }));
+                    todoSnapshots.push({
+                      timestamp: entry.timestamp,
+                      todos: tasksArray
+                    });
+                  }
                 }
               }
             }
@@ -33209,7 +33280,8 @@ program.command("capture").description("Capture a Claude Code session").option("
     if (sessionData.agentIdMap && sessionData.agentIdMap.size > 0) {
       const fs = await import("fs/promises");
       const path = await import("path");
-      const projectDirName = projectPath.replace(/[\\/]/g, "-");
+      const sessionCwd = sessionData.cwd || projectPath;
+      const projectDirName = sessionCwd.replace(/[\\/]/g, "-").replace(/_/g, "-");
       const claudeProjectDir = path.join((0, import_os3.homedir)(), ".claude", "projects", projectDirName);
       logger.info(`Checking for ${sessionData.agentIdMap.size} sub-agent files`);
       for (const [agentId, agentInfo] of sessionData.agentIdMap.entries()) {

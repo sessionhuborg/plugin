@@ -239,7 +239,11 @@ program
         const fs = await import('fs/promises');
         const path = await import('path');
 
-        const projectDirName = projectPath.replace(/[\\/]/g, '-');
+        // Use the session's actual cwd for locating Claude project directory
+        // (projectPath from CLI args may differ from where session was started)
+        // Claude Code replaces path separators AND underscores with hyphens
+        const sessionCwd = sessionData.cwd || projectPath;
+        const projectDirName = sessionCwd.replace(/[\\/]/g, '-').replace(/_/g, '-');
         const claudeProjectDir = path.join(homedir(), '.claude', 'projects', projectDirName);
 
         logger.info(`Checking for ${sessionData.agentIdMap.size} sub-agent files`);

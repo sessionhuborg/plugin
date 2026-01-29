@@ -261,6 +261,17 @@ export class TranscriptParser {
       const todoSnapshots: Array<{timestamp: string; todos: any[]}> = [];
       const attachmentUrls: AttachmentMetadata[] = [];
 
+      // Track tasks from TaskCreate/TaskUpdate tools (new task management system)
+      const taskMap = new Map<string, {
+        subject: string;
+        description: string;
+        activeForm: string;
+        status: string;
+        createdAt: string;
+      }>();
+      // Map tool_use_id to TaskCreate input for associating with tool_result
+      const pendingTaskCreates = new Map<string, { subject: string; description: string; activeForm: string; timestamp: string }>();
+
       // Plan file extraction variables
       let planFileSlug: string | undefined;
       let planFilePath: string | undefined;
@@ -410,6 +421,42 @@ export class TranscriptParser {
             if (Array.isArray(entry.message.content)) {
               for (const contentItem of entry.message.content) {
                 if (contentItem.type === 'tool_result' && contentItem.tool_use_id) {
+                  // Handle TaskCreate tool results - extract taskId and register the task
+                  const pendingCreate = pendingTaskCreates.get(contentItem.tool_use_id);
+                  if (pendingCreate) {
+                    // TaskCreate result format: "Task #N created successfully: <subject>"
+                    // Extract the task ID from the content
+                    const resultContent = Array.isArray(contentItem.content)
+                      ? contentItem.content.map((c: any) => c.text || c || '').join('')
+                      : (contentItem.content || '');
+
+                    const taskIdMatch = resultContent.match(/Task #(\d+)/i);
+                    if (taskIdMatch) {
+                      const taskId = taskIdMatch[1];
+                      taskMap.set(taskId, {
+                        subject: pendingCreate.subject,
+                        description: pendingCreate.description,
+                        activeForm: pendingCreate.activeForm,
+                        status: 'pending',
+                        createdAt: pendingCreate.timestamp
+                      });
+
+                      // Create a snapshot after task creation
+                      const tasksArray = Array.from(taskMap.values()).map(t => ({
+                        content: t.subject,
+                        status: t.status,
+                        activeForm: t.activeForm
+                      }));
+                      todoSnapshots.push({
+                        timestamp: entry.timestamp,
+                        todos: tasksArray
+                      });
+
+                      logger.debug(`Captured TaskCreate: Task #${taskId} - ${pendingCreate.subject}`);
+                    }
+                    pendingTaskCreates.delete(contentItem.tool_use_id);
+                  }
+
                   const toolCall = toolCallMap.get(contentItem.tool_use_id);
                   if (toolCall) {
                     const toolName = toolCall.metadata.tool_name;
@@ -549,10 +596,18 @@ export class TranscriptParser {
               for (const item of contentItems) {
                 if (item.type === 'tool_use' && item.name === 'ExitPlanMode') {
                   exitPlanTimestamps.push(new Date(entry.timestamp));
+                  // First try to get plan from tool input (old format)
                   if (item.input?.plan) {
                     plans.push({
                       timestamp: entry.timestamp,
                       plan: item.input.plan
+                    });
+                  } else if (planFileContent) {
+                    // New format: plan content is in ~/.claude/plans/{slug}.md
+                    // Use the plan file content we read earlier
+                    plans.push({
+                      timestamp: entry.timestamp,
+                      plan: planFileContent
                     });
                   }
                 }
@@ -562,6 +617,50 @@ export class TranscriptParser {
                     timestamp: entry.timestamp,
                     todos: item.input.todos
                   });
+                }
+
+                // Track TaskCreate tool calls (new task management system)
+                if (item.type === 'tool_use' && item.name === 'TaskCreate' && item.id) {
+                  const input = item.input || {};
+                  pendingTaskCreates.set(item.id, {
+                    subject: input.subject || '',
+                    description: input.description || '',
+                    activeForm: input.activeForm || '',
+                    timestamp: entry.timestamp
+                  });
+                }
+
+                // Track TaskUpdate tool calls - update task status
+                if (item.type === 'tool_use' && item.name === 'TaskUpdate') {
+                  const input = item.input || {};
+                  const taskId = input.taskId;
+                  if (taskId && taskMap.has(taskId)) {
+                    const task = taskMap.get(taskId)!;
+                    if (input.status) {
+                      task.status = input.status;
+                    }
+                    if (input.subject) {
+                      task.subject = input.subject;
+                    }
+                    if (input.description) {
+                      task.description = input.description;
+                    }
+                    if (input.activeForm) {
+                      task.activeForm = input.activeForm;
+                    }
+                    taskMap.set(taskId, task);
+
+                    // Create a snapshot after task update
+                    const tasksArray = Array.from(taskMap.values()).map(t => ({
+                      content: t.subject,
+                      status: t.status,
+                      activeForm: t.activeForm
+                    }));
+                    todoSnapshots.push({
+                      timestamp: entry.timestamp,
+                      todos: tasksArray
+                    });
+                  }
                 }
               }
             }
