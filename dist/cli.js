@@ -31364,20 +31364,21 @@ var GrpcAPIClient = class {
             logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
           }
         }
-        if (publicKey) {
-          encryptedFields = await encryptSessionFields({
-            interactions: sessionData.interactions,
-            todoSnapshots: sessionData.todo_snapshots,
-            plans: sessionData.plans,
-            subSessions: sessionData.sub_sessions,
-            attachmentUrls: sessionData.attachment_urls
-          }, publicKey);
-          logger.info("Session data encrypted successfully");
-        } else {
-          logger.warn(`E2E encryption mode (${encryptionMode}) but no valid key - session will fail to decrypt`);
+        if (!publicKey) {
+          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
         }
+        encryptedFields = await encryptSessionFields({
+          interactions: sessionData.interactions,
+          todoSnapshots: sessionData.todo_snapshots,
+          plans: sessionData.plans,
+          subSessions: sessionData.sub_sessions,
+          attachmentUrls: sessionData.attachment_urls
+        }, publicKey);
+        logger.info("Session data encrypted successfully");
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
+        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
       }
     } else {
       logger.info("Enhanced mode: sending plaintext (server handles encryption at rest)");
@@ -31421,10 +31422,11 @@ var GrpcAPIClient = class {
         output_tokens: sessionData.output_tokens || 0,
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
-        metadata: serializedMetadata,
-        // Plan slug - content is uploaded separately via UploadPlanFile RPC
-        plan_slug: sessionData.plan_slug
+        metadata: serializedMetadata
       };
+      if (sessionData.plan_slug) {
+        request.plan_slug = sessionData.plan_slug;
+      }
       if (isEncrypted) {
         request.encryption_status = "encrypted";
         request.encryption_version = keyVersion;
@@ -32136,21 +32138,24 @@ var TranscriptParser = class {
       let planFilePath;
       let planFileContent;
       let planFileModifiedAt;
+      let slugCandidate;
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
-          if (entry.slug) {
-            planFileSlug = entry.slug;
-            planFilePath = path.join(os.homedir(), ".claude", "plans", `${planFileSlug}.md`);
+          if (entry.slug && entry.slug !== slugCandidate) {
+            slugCandidate = entry.slug;
+            const candidatePath = path.join(os.homedir(), ".claude", "plans", `${slugCandidate}.md`);
             try {
-              const planStats = await fs.stat(planFilePath);
-              planFileContent = await fs.readFile(planFilePath, "utf-8");
+              const planStats = await fs.stat(candidatePath);
+              planFileSlug = slugCandidate;
+              planFilePath = candidatePath;
+              planFileContent = await fs.readFile(candidatePath, "utf-8");
               planFileModifiedAt = planStats.mtime.toISOString();
-              logger.info(`Found plan file: ${planFilePath} (slug: ${planFileSlug})`);
+              logger.info(`Found plan file: ${candidatePath} (slug: ${planFileSlug})`);
+              break;
             } catch {
-              logger.debug(`No plan file found at ${planFilePath}`);
+              logger.debug(`No plan file found at ${candidatePath} (slug: ${slugCandidate})`);
             }
-            break;
           }
         } catch {
           continue;
@@ -33275,8 +33280,6 @@ program.command("capture").description("Capture a Claude Code session").option("
       attachment_urls: sessionData.attachmentUrls || [],
       sub_sessions: subSessions,
       interactions: sessionData.interactions || [],
-      // Plan slug - content is uploaded separately via UploadPlanFile RPC
-      plan_slug: sessionData.planFileSlug,
       metadata: {
         import_source: "cli",
         original_session_id: sessionData.sessionId,
@@ -33366,7 +33369,7 @@ program.command("capture").description("Capture a Claude Code session").option("
       analysisTriggered: result.analysisTriggered || false,
       observationsTriggered: result.observationsTriggered || false,
       planFileUploaded,
-      planSlug: sessionData.planFileSlug || null,
+      planSlug: planFileUploaded ? sessionData.planFileSlug || null : null,
       projectName,
       sessionName: finalSessionName,
       transcriptFile: (0, import_path4.basename)(targetFile),
@@ -33470,10 +33473,6 @@ program.command("import-all").description("Import all Claude Code sessions from 
           plans: sessionData.plans || [],
           attachment_urls: sessionData.attachmentUrls || [],
           interactions: sessionData.interactions || [],
-          // Plan file metadata (from ~/.claude/plans/{slug}.md)
-          plan_file_slug: sessionData.planFileSlug,
-          plan_file_content: sessionData.planFileContent,
-          plan_file_modified_at: sessionData.planFileModifiedAt,
           metadata: {
             import_source: "cli_bulk",
             original_session_id: sessionData.sessionId
@@ -33481,6 +33480,22 @@ program.command("import-all").description("Import all Claude Code sessions from 
         };
         const result = await client.upsertSession(apiSessionData);
         if (result.sessionId) {
+          if (sessionData.planFileSlug && sessionData.planFileContent) {
+            try {
+              const planResult = await client.uploadPlanFile(
+                result.sessionId,
+                sessionData.planFileSlug,
+                sessionData.planFileContent
+              );
+              if (planResult.success) {
+                logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
+              } else {
+                logger.warn(`Plan file upload failed: ${planResult.error}`);
+              }
+            } catch (uploadError) {
+              logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+            }
+          }
           successCount++;
           results.push({ file: fileName, success: true, sessionId: result.sessionId });
         } else {

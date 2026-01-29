@@ -24532,20 +24532,21 @@ var GrpcAPIClient = class {
             logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
           }
         }
-        if (publicKey) {
-          encryptedFields = await encryptSessionFields({
-            interactions: sessionData.interactions,
-            todoSnapshots: sessionData.todo_snapshots,
-            plans: sessionData.plans,
-            subSessions: sessionData.sub_sessions,
-            attachmentUrls: sessionData.attachment_urls
-          }, publicKey);
-          logger.info("Session data encrypted successfully");
-        } else {
-          logger.warn(`E2E encryption mode (${encryptionMode}) but no valid key - session will fail to decrypt`);
+        if (!publicKey) {
+          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
         }
+        encryptedFields = await encryptSessionFields({
+          interactions: sessionData.interactions,
+          todoSnapshots: sessionData.todo_snapshots,
+          plans: sessionData.plans,
+          subSessions: sessionData.sub_sessions,
+          attachmentUrls: sessionData.attachment_urls
+        }, publicKey);
+        logger.info("Session data encrypted successfully");
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
+        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
       }
     } else {
       logger.info("Enhanced mode: sending plaintext (server handles encryption at rest)");
@@ -24589,10 +24590,11 @@ var GrpcAPIClient = class {
         output_tokens: sessionData.output_tokens || 0,
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
-        metadata: serializedMetadata,
-        // Plan slug - content is uploaded separately via UploadPlanFile RPC
-        plan_slug: sessionData.plan_slug
+        metadata: serializedMetadata
       };
+      if (sessionData.plan_slug) {
+        request.plan_slug = sessionData.plan_slug;
+      }
       if (isEncrypted) {
         request.encryption_status = "encrypted";
         request.encryption_version = keyVersion;

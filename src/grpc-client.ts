@@ -370,24 +370,25 @@ export class GrpcAPIClient {
           }
         }
 
-        if (publicKey) {
-          // Encrypt sensitive fields
-          encryptedFields = await encryptSessionFields({
-            interactions: sessionData.interactions,
-            todoSnapshots: sessionData.todo_snapshots,
-            plans: sessionData.plans,
-            subSessions: sessionData.sub_sessions,
-            attachmentUrls: sessionData.attachment_urls,
-          }, publicKey);
-          logger.info('Session data encrypted successfully');
-        } else {
-          // E2E mode but no valid key - this is a problem
-          logger.warn(`E2E encryption mode (${encryptionMode}) but no valid key - session will fail to decrypt`);
+        // E2E mode requires a valid encryption key - fail fast if missing
+        if (!publicKey) {
+          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
         }
+
+        // Encrypt sensitive fields
+        encryptedFields = await encryptSessionFields({
+          interactions: sessionData.interactions,
+          todoSnapshots: sessionData.todo_snapshots,
+          plans: sessionData.plans,
+          subSessions: sessionData.sub_sessions,
+          attachmentUrls: sessionData.attachment_urls,
+        }, publicKey);
+        logger.info('Session data encrypted successfully');
       } catch (error) {
-        // For E2E modes, encryption failure is more serious
+        // For E2E modes, encryption failure is critical - do NOT continue with plaintext
+        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
-        // Continue with plaintext but log the issue - backend may reject based on mode
+        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
       }
     } else {
       // Enhanced mode: send plaintext (Supabase encrypts at rest automatically)
