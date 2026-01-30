@@ -31050,10 +31050,6 @@ async function encryptSessionFields(data, publicKey) {
     const payload = await encryptContent(JSON.stringify(data.todoSnapshots), publicKey);
     result.encryptedTodoSnapshots = JSON.stringify(payload);
   }
-  if (data.plans && data.plans.length > 0) {
-    const payload = await encryptContent(JSON.stringify(data.plans), publicKey);
-    result.encryptedPlans = JSON.stringify(payload);
-  }
   if (data.subSessions && data.subSessions.length > 0) {
     const payload = await encryptContent(JSON.stringify(data.subSessions), publicKey);
     result.encryptedSubSessions = JSON.stringify(payload);
@@ -31309,7 +31305,6 @@ var GrpcAPIClient = class {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         todo_snapshots: transformedTodoSnapshots,
-        plans: sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [],
         attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [],
         sub_sessions_json: subSessionsJson,
         interactions: sessionData.interactions || [],
@@ -31370,7 +31365,6 @@ var GrpcAPIClient = class {
         encryptedFields = await encryptSessionFields({
           interactions: sessionData.interactions,
           todoSnapshots: sessionData.todo_snapshots,
-          plans: sessionData.plans,
           subSessions: sessionData.sub_sessions,
           attachmentUrls: sessionData.attachment_urls
         }, publicKey);
@@ -31432,11 +31426,9 @@ var GrpcAPIClient = class {
         request.encryption_version = keyVersion;
         request.encrypted_interactions = encryptedFields.encryptedInteractions;
         request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
-        request.encrypted_plans = encryptedFields.encryptedPlans;
         request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
         request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
         request.todo_snapshots = [];
-        request.plans = [];
         request.attachment_urls = [];
         request.interactions = [];
         request.sub_sessions_json = void 0;
@@ -31444,7 +31436,6 @@ var GrpcAPIClient = class {
         request.encryption_status = "plaintext";
         request.encryption_version = 0;
         request.todo_snapshots = transformedTodoSnapshots;
-        request.plans = sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [];
         request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [];
         request.sub_sessions_json = subSessionsJson;
         request.interactions = (sessionData.interactions || []).map((int) => {
@@ -32146,18 +32137,8 @@ var TranscriptParser = class {
           const entry = JSON.parse(line);
           if (entry.slug && entry.slug !== slugCandidate) {
             slugCandidate = entry.slug;
-            const candidatePath = path.join(os.homedir(), ".claude", "plans", `${slugCandidate}.md`);
-            try {
-              const planStats = await fs.stat(candidatePath);
-              planFileSlug = slugCandidate;
-              planFilePath = candidatePath;
-              planFileContent = await fs.readFile(candidatePath, "utf-8");
-              planFileModifiedAt = planStats.mtime.toISOString();
-              logger.info(`Found plan file: ${candidatePath} (slug: ${planFileSlug})`);
-              break;
-            } catch {
-              logger.debug(`No plan file found at ${candidatePath} (slug: ${slugCandidate})`);
-            }
+            planFileSlug = slugCandidate;
+            break;
           }
         } catch {
           continue;
@@ -32173,25 +32154,26 @@ var TranscriptParser = class {
             for (const match of matches) {
               const inheritedSlug = match[1];
               if (inheritedSlug && inheritedSlug !== planFileSlug) {
-                const inheritedPlanPath = path.join(os.homedir(), ".claude", "plans", `${inheritedSlug}.md`);
-                try {
-                  const inheritedStats = await fs.stat(inheritedPlanPath);
-                  const inheritedContent = await fs.readFile(inheritedPlanPath, "utf-8");
-                  planFileSlug = inheritedSlug;
-                  planFilePath = inheritedPlanPath;
-                  planFileContent = inheritedContent;
-                  planFileModifiedAt = inheritedStats.mtime.toISOString();
-                  logger.info(`Found inherited plan file: ${inheritedPlanPath} (slug: ${inheritedSlug})`);
-                  break;
-                } catch {
-                  logger.debug(`Inherited plan file not found: ${inheritedPlanPath}`);
-                }
+                planFileSlug = inheritedSlug;
+                break;
               }
             }
-            if (planFileContent) break;
+            if (planFileSlug) break;
           } catch {
             continue;
           }
+        }
+      }
+      if (planFileSlug && !planFileContent) {
+        const candidatePath = path.join(os.homedir(), ".claude", "plans", `${planFileSlug}.md`);
+        try {
+          const planStats = await fs.stat(candidatePath);
+          planFilePath = candidatePath;
+          planFileContent = await fs.readFile(candidatePath, "utf-8");
+          planFileModifiedAt = planStats.mtime.toISOString();
+          logger.info(`Loaded plan file: ${candidatePath} (slug: ${planFileSlug})`);
+        } catch {
+          logger.debug(`No plan file found at ${candidatePath} (slug: ${planFileSlug})`);
         }
       }
       for (const line of lines) {
@@ -33348,7 +33330,7 @@ program.command("capture").description("Capture a Claude Code session").option("
       cache_create_tokens: sessionData.totalCacheCreateTokens,
       cache_read_tokens: sessionData.totalCacheReadTokens,
       todo_snapshots: sessionData.todoSnapshots || [],
-      plans: sessionData.plans || [],
+      plan_slug: sessionData.planFileSlug,
       attachment_urls: sessionData.attachmentUrls || [],
       sub_sessions: subSessions,
       interactions: sessionData.interactions || [],
@@ -33399,12 +33381,22 @@ program.command("capture").description("Capture a Claude Code session").option("
       process.exit(1);
     }
     let planFileUploaded = false;
-    if (sessionData.planFileSlug && sessionData.planFileContent) {
+    let planFileContent = sessionData.planFileContent;
+    if (sessionData.planFileSlug && !planFileContent) {
+      try {
+        const fs = await import("fs/promises");
+        const planPath = (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "plans", `${sessionData.planFileSlug}.md`);
+        planFileContent = await fs.readFile(planPath, "utf-8");
+      } catch (readError) {
+        logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+      }
+    }
+    if (sessionData.planFileSlug && planFileContent) {
       try {
         const planResult = await client.uploadPlanFile(
           result.sessionId,
           sessionData.planFileSlug,
-          sessionData.planFileContent
+          planFileContent
         );
         if (planResult.success) {
           logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
@@ -33441,7 +33433,7 @@ program.command("capture").description("Capture a Claude Code session").option("
       analysisTriggered: result.analysisTriggered || false,
       observationsTriggered: result.observationsTriggered || false,
       planFileUploaded,
-      planSlug: planFileUploaded ? sessionData.planFileSlug || null : null,
+      planSlug: sessionData.planFileSlug || null,
       projectName,
       sessionName: finalSessionName,
       transcriptFile: (0, import_path4.basename)(targetFile),
@@ -33542,7 +33534,7 @@ program.command("import-all").description("Import all Claude Code sessions from 
           cache_create_tokens: sessionData.totalCacheCreateTokens,
           cache_read_tokens: sessionData.totalCacheReadTokens,
           todo_snapshots: sessionData.todoSnapshots || [],
-          plans: sessionData.plans || [],
+          plan_slug: sessionData.planFileSlug,
           attachment_urls: sessionData.attachmentUrls || [],
           interactions: sessionData.interactions || [],
           metadata: {
@@ -33552,12 +33544,22 @@ program.command("import-all").description("Import all Claude Code sessions from 
         };
         const result = await client.upsertSession(apiSessionData);
         if (result.sessionId) {
-          if (sessionData.planFileSlug && sessionData.planFileContent) {
+          let planFileContent = sessionData.planFileContent;
+          if (sessionData.planFileSlug && !planFileContent) {
+            try {
+              const fs = await import("fs/promises");
+              const planPath = (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "plans", `${sessionData.planFileSlug}.md`);
+              planFileContent = await fs.readFile(planPath, "utf-8");
+            } catch (readError) {
+              logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+            }
+          }
+          if (sessionData.planFileSlug && planFileContent) {
             try {
               const planResult = await client.uploadPlanFile(
                 result.sessionId,
                 sessionData.planFileSlug,
-                sessionData.planFileContent
+                planFileContent
               );
               if (planResult.success) {
                 logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);

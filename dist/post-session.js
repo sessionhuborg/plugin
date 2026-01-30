@@ -24115,10 +24115,6 @@ async function encryptSessionFields(data, publicKey) {
     const payload = await encryptContent(JSON.stringify(data.todoSnapshots), publicKey);
     result.encryptedTodoSnapshots = JSON.stringify(payload);
   }
-  if (data.plans && data.plans.length > 0) {
-    const payload = await encryptContent(JSON.stringify(data.plans), publicKey);
-    result.encryptedPlans = JSON.stringify(payload);
-  }
   if (data.subSessions && data.subSessions.length > 0) {
     const payload = await encryptContent(JSON.stringify(data.subSessions), publicKey);
     result.encryptedSubSessions = JSON.stringify(payload);
@@ -24374,7 +24370,6 @@ var GrpcAPIClient = class {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         todo_snapshots: transformedTodoSnapshots,
-        plans: sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [],
         attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [],
         sub_sessions_json: subSessionsJson,
         interactions: sessionData.interactions || [],
@@ -24435,7 +24430,6 @@ var GrpcAPIClient = class {
         encryptedFields = await encryptSessionFields({
           interactions: sessionData.interactions,
           todoSnapshots: sessionData.todo_snapshots,
-          plans: sessionData.plans,
           subSessions: sessionData.sub_sessions,
           attachmentUrls: sessionData.attachment_urls
         }, publicKey);
@@ -24497,11 +24491,9 @@ var GrpcAPIClient = class {
         request.encryption_version = keyVersion;
         request.encrypted_interactions = encryptedFields.encryptedInteractions;
         request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
-        request.encrypted_plans = encryptedFields.encryptedPlans;
         request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
         request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
         request.todo_snapshots = [];
-        request.plans = [];
         request.attachment_urls = [];
         request.interactions = [];
         request.sub_sessions_json = void 0;
@@ -24509,7 +24501,6 @@ var GrpcAPIClient = class {
         request.encryption_status = "plaintext";
         request.encryption_version = 0;
         request.todo_snapshots = transformedTodoSnapshots;
-        request.plans = sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [];
         request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [];
         request.sub_sessions_json = subSessionsJson;
         request.interactions = (sessionData.interactions || []).map((int) => {

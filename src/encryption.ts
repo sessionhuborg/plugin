@@ -100,7 +100,6 @@ export async function encryptSessionFields(
   data: {
     interactions?: any[];
     todoSnapshots?: any[];
-    plans?: any[];
     subSessions?: any[];
     attachmentUrls?: any[];
   },
@@ -108,14 +107,12 @@ export async function encryptSessionFields(
 ): Promise<{
   encryptedInteractions?: string;
   encryptedTodoSnapshots?: string;
-  encryptedPlans?: string;
   encryptedSubSessions?: string;
   encryptedAttachmentUrls?: string;
 }> {
   const result: {
     encryptedInteractions?: string;
     encryptedTodoSnapshots?: string;
-    encryptedPlans?: string;
     encryptedSubSessions?: string;
     encryptedAttachmentUrls?: string;
   } = {};
@@ -130,12 +127,6 @@ export async function encryptSessionFields(
   if (data.todoSnapshots && data.todoSnapshots.length > 0) {
     const payload = await encryptContent(JSON.stringify(data.todoSnapshots), publicKey);
     result.encryptedTodoSnapshots = JSON.stringify(payload);
-  }
-
-  // Encrypt plans
-  if (data.plans && data.plans.length > 0) {
-    const payload = await encryptContent(JSON.stringify(data.plans), publicKey);
-    result.encryptedPlans = JSON.stringify(payload);
   }
 
   // Encrypt sub-sessions

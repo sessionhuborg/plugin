@@ -37,10 +37,6 @@ export interface SessionApiData {
       activeForm: string;
     }>;
   }>;
-  plans?: Array<{
-    timestamp: string;
-    plan: string;
-  }>;
   attachment_urls?: Array<{
     interactionIndex: number;
     type: string;

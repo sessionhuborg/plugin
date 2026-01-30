@@ -151,7 +151,8 @@ message CreateSessionRequest {
 
   // Structured data
   repeated TodoSnapshot todo_snapshots = 12;
-  repeated Plan plans = 13;  // DEPRECATED: Plans now stored in Supabase Storage. Kept for backwards compatibility.
+  reserved 13;
+  reserved "plans";
   repeated AttachmentMetadata attachment_urls = 14;
   repeated InteractionData interactions = 15;
   map<string, string> metadata = 16;
@@ -165,7 +166,8 @@ message CreateSessionRequest {
   // These contain EncryptedPayload JSON: {encryptedContent, encryptedKey, iv, version}
   optional string encrypted_interactions = 21;
   optional string encrypted_todo_snapshots = 22;
-  optional string encrypted_plans = 23;  // DEPRECATED: Kept for backwards compatibility
+  reserved 23;
+  reserved "encrypted_plans";
   optional string encrypted_sub_sessions = 24;
   optional string encrypted_attachment_urls = 25;
 
@@ -215,7 +217,8 @@ message Session {
   int64 cache_read_tokens = 11;
   int32 interaction_count = 12;
   repeated TodoSnapshot todo_snapshots = 13;
-  repeated Plan plans = 14;
+  reserved 14;
+  reserved "plans";
   repeated AttachmentMetadata attachment_urls = 15;
   map<string, string> metadata = 16;
   string created_at = 17;
@@ -274,11 +277,6 @@ message Todo {
   string content = 1;
   string status = 2;
   string active_form = 3;
-}
-
-message Plan {
-  string timestamp = 1;
-  string plan = 2;
 }
 
 message AttachmentMetadata {

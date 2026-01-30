@@ -293,9 +293,6 @@ export class GrpcAPIClient {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         todo_snapshots: transformedTodoSnapshots,
-        plans: sessionData.plans && sessionData.plans.length > 0
-          ? sessionData.plans
-          : [],
         attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0
           ? this.transformAttachmentMetadata(sessionData.attachment_urls)
           : [],
@@ -379,7 +376,6 @@ export class GrpcAPIClient {
         encryptedFields = await encryptSessionFields({
           interactions: sessionData.interactions,
           todoSnapshots: sessionData.todo_snapshots,
-          plans: sessionData.plans,
           subSessions: sessionData.sub_sessions,
           attachmentUrls: sessionData.attachment_urls,
         }, publicKey);
@@ -459,12 +455,10 @@ export class GrpcAPIClient {
         request.encryption_version = keyVersion;
         request.encrypted_interactions = encryptedFields.encryptedInteractions;
         request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
-        request.encrypted_plans = encryptedFields.encryptedPlans;
         request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
         request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
         // Empty arrays for plaintext fields (backend stores encrypted versions)
         request.todo_snapshots = [];
-        request.plans = [];
         request.attachment_urls = [];
         request.interactions = [];
         request.sub_sessions_json = undefined;
@@ -473,7 +467,6 @@ export class GrpcAPIClient {
         request.encryption_status = 'plaintext';
         request.encryption_version = 0;
         request.todo_snapshots = transformedTodoSnapshots;
-        request.plans = sessionData.plans && sessionData.plans.length > 0 ? sessionData.plans : [];
         request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0
           ? this.transformAttachmentMetadata(sessionData.attachment_urls)
           : [];
