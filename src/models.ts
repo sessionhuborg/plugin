@@ -143,11 +143,6 @@ export interface EnhancedSessionData {
     uploadedAt: string;
     publicUrl?: string;
   }>;
-  agentIdMap?: Map<string, {
-    interactionIndex: number;
-    taskDescription: string | null;
-    taskPrompt: string | null;
-  }>;
   subSessions?: SubSessionData[];
 
   // Plan file metadata (from ~/.claude/plans/{slug}.md)

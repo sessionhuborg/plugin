@@ -237,7 +237,6 @@ export class TranscriptParser {
 
       const interactions: any[] = [];
       const toolCallMap = new Map<string, any>();
-      const agentIdMap = new Map<string, { interactionIndex: number; taskDescription: string | null; taskPrompt: string | null }>();
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
       let totalCacheCreateTokens = 0;
@@ -447,20 +446,6 @@ export class TranscriptParser {
                   const toolCall = toolCallMap.get(contentItem.tool_use_id);
                   if (toolCall) {
                     const toolName = toolCall.metadata.tool_name;
-
-                    if (toolName === 'Task' && entry.toolUseResult?.agentId) {
-                      const agentId = entry.toolUseResult.agentId;
-                      const taskDescription = toolCall.metadata.tool_input?.description || null;
-                      const taskPrompt = toolCall.metadata.tool_input?.prompt || null;
-
-                      agentIdMap.set(agentId, {
-                        interactionIndex: interactions.length,
-                        taskDescription,
-                        taskPrompt,
-                      });
-
-                      logger.info(`Detected sub-agent: ${agentId}`);
-                    }
 
                     const isCodeEditingTool = ['Edit', 'Write', 'MultiEdit'].includes(toolName);
                     const isWebSearch = toolName === 'WebSearch';
@@ -885,7 +870,6 @@ export class TranscriptParser {
         todoSnapshots,
         plans,
         attachmentUrls,
-        agentIdMap,
         // Plan file metadata
         planFileSlug,
         planFilePath,

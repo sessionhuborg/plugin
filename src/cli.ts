@@ -235,7 +235,7 @@ program
 
       // Discover and parse sub-agent files
       const subSessions: SubSessionData[] = [];
-      if (sessionData.agentIdMap && sessionData.agentIdMap.size > 0) {
+      {
         const fs = await import('fs/promises');
         const path = await import('path');
 
@@ -245,52 +245,57 @@ program
         const sessionCwd = sessionData.cwd || projectPath;
         const projectDirName = sessionCwd.replace(/[\\/]/g, '-').replace(/_/g, '-');
         const claudeProjectDir = path.join(homedir(), '.claude', 'projects', projectDirName);
+        const subagentsDir = path.join(claudeProjectDir, sessionData.sessionId, 'subagents');
 
-        logger.info(`Checking for ${sessionData.agentIdMap.size} sub-agent files`);
-
-        for (const [agentId, agentInfo] of sessionData.agentIdMap.entries()) {
-          // Claude Code 2.1.x stores agent files in session subdirectories
-          // Try new location first: {project}/{sessionId}/subagents/agent-{id}.jsonl
-          // Fall back to old location: {project}/agent-{id}.jsonl
-          const newAgentFilePath = path.join(
-            claudeProjectDir,
-            sessionData.sessionId,
-            'subagents',
-            `agent-${agentId}.jsonl`
-          );
-          const oldAgentFilePath = path.join(claudeProjectDir, `agent-${agentId}.jsonl`);
-
-          let agentFilePath: string | null = null;
-
-          try {
-            await fs.access(newAgentFilePath);
-            agentFilePath = newAgentFilePath;
-            logger.info(`Found sub-agent file (v2.1.x): subagents/agent-${agentId}.jsonl`);
-          } catch {
-            // Try old location
-            try {
-              await fs.access(oldAgentFilePath);
-              agentFilePath = oldAgentFilePath;
-              logger.info(`Found sub-agent file (legacy): agent-${agentId}.jsonl`);
-            } catch {
-              // File doesn't exist in either location
-              logger.info(`Sub-agent file not found for ${agentId}`);
-            }
+        const estimateInteractionIndex = (startTime: string): number => {
+          if (!startTime || !sessionData.interactions || sessionData.interactions.length === 0) {
+            return 0;
           }
 
-          if (agentFilePath) {
+          const startMs = Date.parse(startTime);
+          if (Number.isNaN(startMs)) {
+            return 0;
+          }
+
+          let index = 0;
+          for (let i = 0; i < sessionData.interactions.length; i++) {
+            const timestamp = sessionData.interactions[i]?.timestamp;
+            if (!timestamp) continue;
+            const tsMs = Date.parse(timestamp);
+            if (Number.isNaN(tsMs)) continue;
+            if (tsMs <= startMs) {
+              index = i;
+            } else {
+              break;
+            }
+          }
+          return index;
+        };
+
+        try {
+          const files = await fs.readdir(subagentsDir);
+          const agentFiles = files.filter((file) => file.startsWith('agent-') && file.endsWith('.jsonl'));
+          logger.info(`Checking for sub-agent files in ${subagentsDir} (${agentFiles.length} found)`);
+
+          for (const file of agentFiles) {
+            const agentId = file.replace(/^agent-/, '').replace(/\.jsonl$/, '');
+            const agentFilePath = path.join(subagentsDir, file);
+
             const subSession = await parser.parseSubAgentFile(
               agentFilePath,
               agentId,
-              agentInfo.taskDescription,
-              agentInfo.taskPrompt,
-              agentInfo.interactionIndex
+              null,
+              null,
+              0
             );
 
             if (subSession) {
+              subSession.interactionIndex = estimateInteractionIndex(subSession.startTime);
               subSessions.push(subSession);
             }
           }
+        } catch {
+          logger.info(`No sub-agent directory found at ${subagentsDir}`);
         }
 
         if (subSessions.length > 0) {

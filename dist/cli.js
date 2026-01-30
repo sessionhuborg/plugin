@@ -32105,7 +32105,6 @@ var TranscriptParser = class {
       }
       const interactions = [];
       const toolCallMap = /* @__PURE__ */ new Map();
-      const agentIdMap = /* @__PURE__ */ new Map();
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
       let totalCacheCreateTokens = 0;
@@ -32264,17 +32263,6 @@ var TranscriptParser = class {
                   const toolCall = toolCallMap.get(contentItem.tool_use_id);
                   if (toolCall) {
                     const toolName = toolCall.metadata.tool_name;
-                    if (toolName === "Task" && entry.toolUseResult?.agentId) {
-                      const agentId = entry.toolUseResult.agentId;
-                      const taskDescription = toolCall.metadata.tool_input?.description || null;
-                      const taskPrompt = toolCall.metadata.tool_input?.prompt || null;
-                      agentIdMap.set(agentId, {
-                        interactionIndex: interactions.length,
-                        taskDescription,
-                        taskPrompt
-                      });
-                      logger.info(`Detected sub-agent: ${agentId}`);
-                    }
                     const isCodeEditingTool = ["Edit", "Write", "MultiEdit"].includes(toolName);
                     const isWebSearch = toolName === "WebSearch";
                     const isExitPlanMode = toolName === "ExitPlanMode";
@@ -32623,7 +32611,6 @@ var TranscriptParser = class {
         todoSnapshots,
         plans,
         attachmentUrls,
-        agentIdMap,
         // Plan file metadata
         planFileSlug,
         planFilePath,
@@ -33259,47 +33246,56 @@ program.command("capture").description("Capture a Claude Code session").option("
       process.exit(1);
     }
     const subSessions = [];
-    if (sessionData.agentIdMap && sessionData.agentIdMap.size > 0) {
+    {
       const fs = await import("fs/promises");
       const path = await import("path");
       const sessionCwd = sessionData.cwd || projectPath;
       const projectDirName = sessionCwd.replace(/[\\/]/g, "-").replace(/_/g, "-");
       const claudeProjectDir = path.join((0, import_os3.homedir)(), ".claude", "projects", projectDirName);
-      logger.info(`Checking for ${sessionData.agentIdMap.size} sub-agent files`);
-      for (const [agentId, agentInfo] of sessionData.agentIdMap.entries()) {
-        const newAgentFilePath = path.join(
-          claudeProjectDir,
-          sessionData.sessionId,
-          "subagents",
-          `agent-${agentId}.jsonl`
-        );
-        const oldAgentFilePath = path.join(claudeProjectDir, `agent-${agentId}.jsonl`);
-        let agentFilePath = null;
-        try {
-          await fs.access(newAgentFilePath);
-          agentFilePath = newAgentFilePath;
-          logger.info(`Found sub-agent file (v2.1.x): subagents/agent-${agentId}.jsonl`);
-        } catch {
-          try {
-            await fs.access(oldAgentFilePath);
-            agentFilePath = oldAgentFilePath;
-            logger.info(`Found sub-agent file (legacy): agent-${agentId}.jsonl`);
-          } catch {
-            logger.info(`Sub-agent file not found for ${agentId}`);
+      const subagentsDir = path.join(claudeProjectDir, sessionData.sessionId, "subagents");
+      const estimateInteractionIndex = (startTime) => {
+        if (!startTime || !sessionData.interactions || sessionData.interactions.length === 0) {
+          return 0;
+        }
+        const startMs = Date.parse(startTime);
+        if (Number.isNaN(startMs)) {
+          return 0;
+        }
+        let index = 0;
+        for (let i = 0; i < sessionData.interactions.length; i++) {
+          const timestamp = sessionData.interactions[i]?.timestamp;
+          if (!timestamp) continue;
+          const tsMs = Date.parse(timestamp);
+          if (Number.isNaN(tsMs)) continue;
+          if (tsMs <= startMs) {
+            index = i;
+          } else {
+            break;
           }
         }
-        if (agentFilePath) {
+        return index;
+      };
+      try {
+        const files = await fs.readdir(subagentsDir);
+        const agentFiles = files.filter((file) => file.startsWith("agent-") && file.endsWith(".jsonl"));
+        logger.info(`Checking for sub-agent files in ${subagentsDir} (${agentFiles.length} found)`);
+        for (const file of agentFiles) {
+          const agentId = file.replace(/^agent-/, "").replace(/\.jsonl$/, "");
+          const agentFilePath = path.join(subagentsDir, file);
           const subSession = await parser.parseSubAgentFile(
             agentFilePath,
             agentId,
-            agentInfo.taskDescription,
-            agentInfo.taskPrompt,
-            agentInfo.interactionIndex
+            null,
+            null,
+            0
           );
           if (subSession) {
+            subSession.interactionIndex = estimateInteractionIndex(subSession.startTime);
             subSessions.push(subSession);
           }
         }
+      } catch {
+        logger.info(`No sub-agent directory found at ${subagentsDir}`);
       }
       if (subSessions.length > 0) {
         logger.info(`Discovered ${subSessions.length} sub-agent conversations`);
