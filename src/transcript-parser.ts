@@ -280,28 +280,15 @@ export class TranscriptParser {
 
       // STEP 1: Extract slug from transcript entries to locate plan file
       // The slug field may not be in the first entry (e.g., file-history-snapshot doesn't have it)
-      // Search through entries until we find a slug with an existing plan file
+      // Search through entries until we find a slug
       let slugCandidate: string | undefined;
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
           if (entry.slug && entry.slug !== slugCandidate) {
             slugCandidate = entry.slug;
-            const candidatePath = path.join(os.homedir(), '.claude', 'plans', `${slugCandidate}.md`);
-
-            // Read plan file if it exists
-            try {
-              const planStats = await fs.stat(candidatePath);
-              planFileSlug = slugCandidate;
-              planFilePath = candidatePath;
-              planFileContent = await fs.readFile(candidatePath, 'utf-8');
-              planFileModifiedAt = planStats.mtime.toISOString();
-              logger.info(`Found plan file: ${candidatePath} (slug: ${planFileSlug})`);
-              break; // Found valid plan file, stop searching
-            } catch {
-              // Plan file doesn't exist - session may not have used plan mode
-              logger.debug(`No plan file found at ${candidatePath} (slug: ${slugCandidate})`);
-            }
+            planFileSlug = slugCandidate;
+            break;
           }
         } catch {
           continue;
@@ -323,28 +310,28 @@ export class TranscriptParser {
               const inheritedSlug = match[1];
               if (inheritedSlug && inheritedSlug !== planFileSlug) {
                 // Found a reference to a different plan file (inherited/teleported)
-                const inheritedPlanPath = path.join(os.homedir(), '.claude', 'plans', `${inheritedSlug}.md`);
-                try {
-                  const inheritedStats = await fs.stat(inheritedPlanPath);
-                  const inheritedContent = await fs.readFile(inheritedPlanPath, 'utf-8');
-
-                  // Use this inherited plan if we don't have one yet
-                  planFileSlug = inheritedSlug;
-                  planFilePath = inheritedPlanPath;
-                  planFileContent = inheritedContent;
-                  planFileModifiedAt = inheritedStats.mtime.toISOString();
-                  logger.info(`Found inherited plan file: ${inheritedPlanPath} (slug: ${inheritedSlug})`);
-                  break; // Use first found inherited plan
-                } catch {
-                  // Inherited plan file doesn't exist on disk
-                  logger.debug(`Inherited plan file not found: ${inheritedPlanPath}`);
-                }
+                planFileSlug = inheritedSlug;
+                break; // Use first found inherited plan reference
               }
             }
-            if (planFileContent) break; // Stop searching if we found one
+            if (planFileSlug) break; // Stop searching if we found one
           } catch {
             continue;
           }
+        }
+      }
+
+      // STEP 3: Load plan file content (optional, for plan snapshots and upload)
+      if (planFileSlug && !planFileContent) {
+        const candidatePath = path.join(os.homedir(), '.claude', 'plans', `${planFileSlug}.md`);
+        try {
+          const planStats = await fs.stat(candidatePath);
+          planFilePath = candidatePath;
+          planFileContent = await fs.readFile(candidatePath, 'utf-8');
+          planFileModifiedAt = planStats.mtime.toISOString();
+          logger.info(`Loaded plan file: ${candidatePath} (slug: ${planFileSlug})`);
+        } catch {
+          logger.debug(`No plan file found at ${candidatePath} (slug: ${planFileSlug})`);
         }
       }
 

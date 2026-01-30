@@ -561,7 +561,7 @@ describe('TranscriptParser', () => {
       expect(result?.planningModeInfo?.planningCycles).toBe(1);
     });
 
-    it('should not set planFileSlug when plan file is missing', async () => {
+    it('should capture planFileSlug even when plan file is missing', async () => {
       const fs = await import('fs/promises');
 
       const transcriptPath = '/path/to/session.jsonl';
@@ -598,7 +598,7 @@ describe('TranscriptParser', () => {
 
       const result = await parser.parseTranscriptFile(transcriptPath);
 
-      expect(result?.planFileSlug).toBeUndefined();
+      expect(result?.planFileSlug).toBe(slug);
       expect(result?.planFileContent).toBeUndefined();
     });
 

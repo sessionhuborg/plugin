@@ -329,6 +329,7 @@ program
         cache_read_tokens: sessionData.totalCacheReadTokens,
         todo_snapshots: sessionData.todoSnapshots || [],
         plans: sessionData.plans || [],
+        plan_slug: sessionData.planFileSlug,
         attachment_urls: sessionData.attachmentUrls || [],
         sub_sessions: subSessions,
         interactions: sessionData.interactions || [],
@@ -389,12 +390,22 @@ program
       // Upload plan file to storage if available
       // Storage path: {teamId}/plans/{sessionId}/{slug}.md
       let planFileUploaded = false;
-      if (sessionData.planFileSlug && sessionData.planFileContent) {
+      let planFileContent = sessionData.planFileContent;
+      if (sessionData.planFileSlug && !planFileContent) {
+        try {
+          const fs = await import('fs/promises');
+          const planPath = join(homedir(), '.claude', 'plans', `${sessionData.planFileSlug}.md`);
+          planFileContent = await fs.readFile(planPath, 'utf-8');
+        } catch (readError) {
+          logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+        }
+      }
+      if (sessionData.planFileSlug && planFileContent) {
         try {
           const planResult = await client.uploadPlanFile(
             result.sessionId,
             sessionData.planFileSlug,
-            sessionData.planFileContent
+            planFileContent
           );
           if (planResult.success) {
             logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
@@ -443,7 +454,7 @@ program
         analysisTriggered: (result as any).analysisTriggered || false,
         observationsTriggered: (result as any).observationsTriggered || false,
         planFileUploaded,
-        planSlug: planFileUploaded ? (sessionData.planFileSlug || null) : null,
+        planSlug: sessionData.planFileSlug || null,
         projectName,
         sessionName: finalSessionName,
         transcriptFile: basename(targetFile),
@@ -574,6 +585,7 @@ program
             cache_read_tokens: sessionData.totalCacheReadTokens,
             todo_snapshots: sessionData.todoSnapshots || [],
             plans: sessionData.plans || [],
+            plan_slug: sessionData.planFileSlug,
             attachment_urls: sessionData.attachmentUrls || [],
             interactions: sessionData.interactions || [],
             metadata: {
@@ -586,12 +598,22 @@ program
 
           if (result.sessionId) {
             // Upload plan file to storage if available
-            if (sessionData.planFileSlug && sessionData.planFileContent) {
+            let planFileContent = sessionData.planFileContent;
+            if (sessionData.planFileSlug && !planFileContent) {
+              try {
+                const fs = await import('fs/promises');
+                const planPath = join(homedir(), '.claude', 'plans', `${sessionData.planFileSlug}.md`);
+                planFileContent = await fs.readFile(planPath, 'utf-8');
+              } catch (readError) {
+                logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+              }
+            }
+            if (sessionData.planFileSlug && planFileContent) {
               try {
                 const planResult = await client.uploadPlanFile(
                   result.sessionId,
                   sessionData.planFileSlug,
-                  sessionData.planFileContent
+                  planFileContent
                 );
                 if (planResult.success) {
                   logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
