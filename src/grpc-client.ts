@@ -934,6 +934,7 @@ export class GrpcAPIClient {
 
   /**
    * Get project observations for context injection
+   * Updated to include project-scoped lifecycle governance fields
    */
   async getProjectObservations(
     projectId: string,
@@ -951,6 +952,8 @@ export class GrpcAPIClient {
       concepts: string[];
       files: string[];
       toolName?: string;
+      observationScope?: 'session' | 'project';
+      lifecycleState?: 'draft' | 'active' | 'deprecated' | 'superseded';
       createdAt: string;
     }>;
     totalCount: number;
@@ -989,6 +992,9 @@ export class GrpcAPIClient {
               concepts: obs.concepts || [],
               files: obs.files || [],
               toolName: obs.tool_name,
+              // Project-scoped lifecycle governance fields
+              observationScope: obs.observation_scope,
+              lifecycleState: obs.lifecycle_state,
               createdAt: obs.created_at,
             }),
           );

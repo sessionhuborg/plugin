@@ -1,6 +1,11 @@
 /**
  * Context formatter for SessionHub observations
  * Formats observations from the database into markdown context for injection
+ * 
+ * Updated to support project-scoped lifecycle governance:
+ * - Prefers project-scoped ACTIVE observations
+ * - Ignores deprecated/superseded by default
+ * - Backward compatible with older observation records (fields may be absent)
  */
 
 export interface Observation {
@@ -18,8 +23,81 @@ export interface Observation {
   interaction_id?: string;
   tool_name?: string;
   discovery_tokens: number;
+  
+  // Project-scoped lifecycle governance (may be undefined for backward compatibility)
+  observation_scope?: 'session' | 'project';
+  lifecycle_state?: 'draft' | 'active' | 'deprecated' | 'superseded';
+  superseded_by_observation_id?: string;
+  promoted_from_observation_id?: string;
+  promoted_at?: string;
+  promoted_by?: string;
+  curation_source?: 'human' | 'ai_suggested';
+  
   created_at: string;
   updated_at: string;
+}
+
+export interface FormatOptions {
+  topN?: number; // Number of observations to show full details for (default: 10)
+  includeTable?: boolean; // Whether to include summary table (default: true)
+  includeFullDetails?: boolean; // Whether to include full details section (default: true)
+  projectName?: string; // Optional project name for header
+  includeDraft?: boolean; // Include draft observations (default: false)
+  includeDeprecated?: boolean; // Include deprecated observations (default: false)
+}
+
+/**
+ * Filter observations for context injection
+ * - Prefers project-scoped ACTIVE observations
+ * - Ignores deprecated/superseded by default
+ * - Backward compatible with older records missing lifecycle fields
+ */
+export function filterObservationsForInjection(
+  observations: Observation[],
+  options: { includeDraft?: boolean; includeDeprecated?: boolean } = {}
+): Observation[] {
+  const { includeDraft = false, includeDeprecated = false } = options;
+  
+  return observations.filter(obs => {
+    // Backward compatibility: if lifecycle fields are absent, assume active
+    const scope = obs.observation_scope || 'session';
+    const state = obs.lifecycle_state || 'active';
+    
+    // Filter by scope: prefer project-scoped
+    // (session-scoped are only included if no project-scoped available)
+    
+    // Filter by lifecycle state
+    if (state === 'superseded') return false;
+    if (state === 'deprecated' && !includeDeprecated) return false;
+    if (state === 'draft' && !includeDraft) return false;
+    if (state !== 'active' && state !== 'draft') return false;
+    
+    return true;
+  });
+}
+
+/**
+ * Sort observations for injection priority
+ * Project-scoped ACTIVE observations come first
+ */
+export function sortObservationsByPriority(observations: Observation[]): Observation[] {
+  return [...observations].sort((a, b) => {
+    const scopeOrder = (obs: Observation) => {
+      const scope = obs.observation_scope || 'session';
+      const state = obs.lifecycle_state || 'active';
+      
+      // Project-scoped active first
+      if (scope === 'project' && state === 'active') return 0;
+      // Session-scoped active second
+      if (scope === 'session' && state === 'active') return 1;
+      // Drafts third
+      if (state === 'draft') return 2;
+      // Everything else last
+      return 3;
+    };
+    
+    return scopeOrder(a) - scopeOrder(b);
+  });
 }
 
 export interface FormatOptions {
@@ -109,6 +187,7 @@ function formatFullObservation(obs: Observation, index: number): string {
 
 /**
  * Format observations into markdown context with progressive disclosure
+ * Now filters for project-scoped ACTIVE observations by default
  */
 export function formatObservationsContext(
   observations: Observation[],
@@ -119,18 +198,46 @@ export function formatObservationsContext(
     includeTable = true,
     includeFullDetails = true,
     projectName,
+    includeDraft = false,
+    includeDeprecated = false,
   } = options;
 
-  if (observations.length === 0) {
-    return '# Project Memory\n\nNo observations recorded yet.';
+  // Filter and sort observations for injection
+  // This ensures only project-scoped ACTIVE observations are included by default
+  const filteredObservations = filterObservationsForInjection(observations, {
+    includeDraft,
+    includeDeprecated,
+  });
+  
+  const sortedObservations = sortObservationsByPriority(filteredObservations);
+
+  if (sortedObservations.length === 0) {
+    // If no project-scoped active observations, fall back to session-scoped active
+    const fallbackObservations = observations.filter(obs => {
+      const scope = obs.observation_scope || 'session';
+      const state = obs.lifecycle_state || 'active';
+      return scope === 'session' && state === 'active';
+    });
+    
+    if (fallbackObservations.length === 0) {
+      return '# Project Memory\n\nNo active observations recorded yet.';
+    }
+    
+    return formatObservationsContext(fallbackObservations, {
+      ...options,
+      includeDraft: true,
+    });
   }
 
   let output = '';
 
   // Header
   const projectTitle = projectName ? ` (${projectName})` : '';
-  output += `# Project Memory${projectTitle}\n\n`;
-  output += `${observations.length} observation${observations.length === 1 ? '' : 's'} recorded from your recent work.\n\n`;
+  const scopeNote = sortedObservations.some(o => o.observation_scope === 'project') 
+    ? ' (project-scoped)' 
+    : '';
+  output += `# Project Memory${projectTitle}${scopeNote}\n\n`;
+  output += `${sortedObservations.length} active observation${sortedObservations.length === 1 ? '' : 's'} for context.\n\n`;
 
   // Summary table (compact view of all observations)
   if (includeTable) {
@@ -138,25 +245,25 @@ export function formatObservationsContext(
     output += '| # | Type | Title | Files | Date |\n';
     output += '|---|------|-------|-------|------|\n';
 
-    for (let i = 0; i < observations.length; i++) {
-      output += formatTableRow(observations[i], i) + '\n';
+    for (let i = 0; i < sortedObservations.length; i++) {
+      output += formatTableRow(sortedObservations[i], i) + '\n';
     }
 
     output += '\n';
   }
 
   // Full details for top N observations
-  if (includeFullDetails && observations.length > 0) {
-    const detailCount = Math.min(topN, observations.length);
+  if (includeFullDetails && sortedObservations.length > 0) {
+    const detailCount = Math.min(topN, sortedObservations.length);
     output += `## Recent Details (Top ${detailCount})\n\n`;
 
     for (let i = 0; i < detailCount; i++) {
-      output += formatFullObservation(observations[i], i);
+      output += formatFullObservation(sortedObservations[i], i);
     }
 
     // Add note if there are more observations not shown in detail
-    if (observations.length > detailCount) {
-      output += `*${observations.length - detailCount} more observation${observations.length - detailCount === 1 ? '' : 's'} available (see overview table above)*\n\n`;
+    if (sortedObservations.length > detailCount) {
+      output += `*${sortedObservations.length - detailCount} more observation${sortedObservations.length - detailCount === 1 ? '' : 's'} available (see overview table above)*\n\n`;
     }
   }
 
