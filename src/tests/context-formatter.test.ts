@@ -1,12 +1,14 @@
 /**
  * Tests for context-formatter
- * Covers: formatObservationsContext, calculateContextStats
+ * Covers: formatObservationsContext, calculateContextStats, filterObservationsForInjection, sortObservationsByPriority
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   formatObservationsContext,
   calculateContextStats,
+  filterObservationsForInjection,
+  sortObservationsByPriority,
   type Observation,
 } from '../context-formatter.js';
 
@@ -25,6 +27,9 @@ function createMockObservation(overrides: Partial<Observation> = {}): Observatio
     concepts: ['concept1', 'concept2'],
     files: ['src/file1.ts', 'src/file2.ts'],
     discovery_tokens: 100,
+    // Default to project-scoped active for backward compatibility in most tests
+    observation_scope: 'project',
+    lifecycle_state: 'active',
     created_at: '2024-01-15T10:00:00.000Z',
     updated_at: '2024-01-15T10:00:00.000Z',
     ...overrides,
@@ -283,5 +288,159 @@ describe('calculateContextStats', () => {
     expect(stats.observationCount).toBe(0);
     expect(stats.typeCounts).toEqual({});
     expect(stats.totalDiscoveryTokens).toBe(0);
+  });
+});
+
+describe('filterObservationsForInjection', () => {
+  // ==========================================
+  // Test: Filter out superseded observations
+  // ==========================================
+  it('should filter out superseded observations by default', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'obs-2', lifecycle_state: 'superseded' }),
+      createMockObservation({ id: 'obs-3', lifecycle_state: 'active' }),
+    ];
+
+    const filtered = filterObservationsForInjection(observations);
+
+    expect(filtered.length).toBe(2);
+    expect(filtered.map(o => o.id)).toEqual(['obs-1', 'obs-3']);
+  });
+
+  // ==========================================
+  // Test: Filter out deprecated observations by default
+  // ==========================================
+  it('should filter out deprecated observations by default', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'obs-2', lifecycle_state: 'deprecated' }),
+      createMockObservation({ id: 'obs-3', lifecycle_state: 'active' }),
+    ];
+
+    const filtered = filterObservationsForInjection(observations);
+
+    expect(filtered.length).toBe(2);
+    expect(filtered.map(o => o.id)).toEqual(['obs-1', 'obs-3']);
+  });
+
+  // ==========================================
+  // Test: Include deprecated when requested
+  // ==========================================
+  it('should include deprecated observations when includeDeprecated is true', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'obs-2', lifecycle_state: 'deprecated' }),
+    ];
+
+    const filtered = filterObservationsForInjection(observations, { includeDeprecated: true });
+
+    expect(filtered.length).toBe(2);
+  });
+
+  // ==========================================
+  // Test: Backward compatibility - missing lifecycle fields treated as active
+  // ==========================================
+  it('should treat observations without lifecycle fields as active (backward compatibility)', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', lifecycle_state: undefined }),
+      createMockObservation({ id: 'obs-2', lifecycle_state: 'active' }),
+    ];
+
+    const filtered = filterObservationsForInjection(observations);
+
+    expect(filtered.length).toBe(2);
+  });
+
+  // ==========================================
+  // Test: Prefer project-scoped observations
+  // ==========================================
+  it('should include both project and session scoped active observations', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', observation_scope: 'project', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'obs-2', observation_scope: 'session', lifecycle_state: 'active' }),
+    ];
+
+    const filtered = filterObservationsForInjection(observations);
+
+    expect(filtered.length).toBe(2);
+  });
+});
+
+describe('sortObservationsByPriority', () => {
+  // ==========================================
+  // Test: Project-scoped active first
+  // ==========================================
+  it('should prioritize project-scoped active observations', () => {
+    const observations = [
+      createMockObservation({ id: 'session-active', observation_scope: 'session', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'project-active', observation_scope: 'project', lifecycle_state: 'active' }),
+      createMockObservation({ id: 'draft', observation_scope: 'project', lifecycle_state: 'draft' }),
+    ];
+
+    const sorted = sortObservationsByPriority(observations);
+
+    expect(sorted[0].id).toBe('project-active');
+    expect(sorted[1].id).toBe('session-active');
+    expect(sorted[2].id).toBe('draft');
+  });
+
+  // ==========================================
+  // Test: Backward compatibility
+  // ==========================================
+  it('should handle missing scope/state fields (backward compatibility)', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', observation_scope: undefined, lifecycle_state: undefined }),
+      createMockObservation({ id: 'obs-2', observation_scope: 'project', lifecycle_state: 'active' }),
+    ];
+
+    const sorted = sortObservationsByPriority(observations);
+
+    // Should not throw
+    expect(sorted.length).toBe(2);
+  });
+});
+
+describe('formatObservationsContext with lifecycle filtering', () => {
+  // ==========================================
+  // Test: Filter superseded observations in output
+  // ==========================================
+  it('should not include superseded observations in formatted output', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', title: 'Active Observation' }),
+      createMockObservation({ id: 'obs-2', title: 'Superseded Observation', lifecycle_state: 'superseded' }),
+    ];
+
+    const result = formatObservationsContext(observations);
+
+    expect(result).toContain('Active Observation');
+    expect(result).not.toContain('Superseded Observation');
+  });
+
+  // ==========================================
+  // Test: Include scope note in header
+  // ==========================================
+  it('should include scope note in header for project-scoped observations', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', observation_scope: 'project' }),
+    ];
+
+    const result = formatObservationsContext(observations);
+
+    expect(result).toContain('(project-scoped)');
+  });
+
+  // ==========================================
+  // Test: Fallback to session-scoped when no project-scoped available
+  // ==========================================
+  it('should fall back to session-scoped observations when no project-scoped available', () => {
+    const observations = [
+      createMockObservation({ id: 'obs-1', observation_scope: 'session', lifecycle_state: 'active' }),
+    ];
+
+    const result = formatObservationsContext(observations);
+
+    // Should still show content (no fallback message)
+    expect(result).toContain('obs-1');
   });
 });
