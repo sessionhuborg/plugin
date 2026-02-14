@@ -31877,6 +31877,79 @@ var GrpcAPIClient = class {
     }
   }
   /**
+   * Get approved team skills for syncing to plugin as SKILL.md files.
+   * Only returns approved, team-visible, non-sensitive skills.
+   */
+  async getTeamSkills(teamId, projectId, scope) {
+    return new Promise((resolve2, reject) => {
+      const request = { team_id: teamId };
+      if (projectId) request.project_id = projectId;
+      if (scope) request.scope = scope;
+      this.client.getTeamSkills(
+        request,
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve2([]);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, "Get team skills")));
+            return;
+          }
+          const skills = (response.skills || []).map((s) => ({
+            id: s.id,
+            slug: s.slug,
+            title: s.title,
+            summary: s.summary || void 0,
+            content: s.content,
+            category: s.category,
+            tags: s.tags || [],
+            scope: s.scope,
+            version: s.version || 1,
+            lastPublishedAt: s.last_published_at || void 0,
+            projectId: s.project_id || void 0
+          }));
+          resolve2(skills);
+        }
+      );
+    });
+  }
+  /**
+   * Create a new team skill draft from a local file (plugin → team push).
+   * The skill appears in the web UI as a draft for review.
+   */
+  async createTeamSkill(input) {
+    return new Promise((resolve2, reject) => {
+      const request = {
+        team_id: input.teamId,
+        title: input.title,
+        content: input.content
+      };
+      if (input.projectId) request.project_id = input.projectId;
+      if (input.summary) request.summary = input.summary;
+      if (input.category) request.category = input.category;
+      if (input.tags && input.tags.length > 0) request.tags = input.tags;
+      if (input.scope) request.scope = input.scope;
+      this.client.createTeamSkill(
+        request,
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            reject(new Error(this.getErrorMessage(error, "Create team skill")));
+            return;
+          }
+          resolve2({
+            skillId: response.skill_id,
+            slug: response.slug
+          });
+        }
+      );
+    });
+  }
+  /**
    * Get session quota information for the current user
    * Returns current session count, limit, and remaining capacity
    */
@@ -33590,6 +33663,192 @@ program.command("import-all").description("Import all Claude Code sessions from 
         upgradeUrl: "https://sessionhub.dev/pricing"
       } : void 0,
       results
+    };
+    console.log(JSON.stringify(output, null, 2));
+  } catch (error) {
+    console.error("Error:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+});
+program.command("sync-skills").description("Sync approved team skills as SKILL.md files for Claude Code").option("--team <id>", "Team ID (uses primary team if omitted)").option("--project <id>", "Filter by project ID").option("--scope <scope>", "Filter by scope: team or project").action(async (opts) => {
+  try {
+    const auth = await initializeClient();
+    if (!auth) {
+      process.exit(1);
+    }
+    const { client } = auth;
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    let teamId = opts.team;
+    let teamSlug;
+    if (!teamId) {
+      const teams = await client.listUserTeams();
+      if (teams.length === 0) {
+        console.error("Error: No teams found. Join or create a team first.");
+        process.exit(1);
+      }
+      teamId = teams[0].id;
+      teamSlug = teams[0].slug;
+    }
+    const skills = await client.getTeamSkills(teamId, opts.project, opts.scope);
+    if (skills.length === 0) {
+      const output2 = {
+        success: true,
+        message: "No approved team skills found to sync.",
+        teamId,
+        skillsSynced: 0,
+        skillsRemoved: 0
+      };
+      console.log(JSON.stringify(output2, null, 2));
+      return;
+    }
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || (0, import_path4.join)(__dirname3, "..");
+    const skillsDir = path.join(pluginRoot, "skills");
+    await fs.mkdir(skillsDir, { recursive: true });
+    const cacheFile = (0, import_path4.join)(CONFIG_DIR, "skills-cache.json");
+    let cache = {};
+    try {
+      const cacheData = await fs.readFile(cacheFile, "utf-8");
+      cache = JSON.parse(cacheData);
+    } catch {
+    }
+    const currentSlugs = /* @__PURE__ */ new Set();
+    let newCount = 0;
+    let updatedCount = 0;
+    let unchangedCount = 0;
+    const resolvedSkillsDir = path.resolve(skillsDir);
+    for (const skill of skills) {
+      const effectiveSlug = skill.scope === "project" && skill.projectId ? `${teamSlug || teamId.slice(0, 8)}-${skill.slug}` : skill.slug;
+      const skillDir = path.join(skillsDir, effectiveSlug);
+      const resolvedDir = path.resolve(skillDir);
+      if (!resolvedDir.startsWith(resolvedSkillsDir + path.sep)) {
+        logger.warn(`Skipping skill with unsafe slug: ${effectiveSlug}`);
+        continue;
+      }
+      currentSlugs.add(effectiveSlug);
+      const cached = cache[effectiveSlug];
+      if (cached && cached.version === skill.version) {
+        unchangedCount++;
+        continue;
+      }
+      const description = (skill.summary || skill.title).replace(/\n/g, " ").replace(/"/g, '\\"');
+      const frontmatter = [
+        "---",
+        `name: ${effectiveSlug}`,
+        `description: "${description}"`,
+        "---",
+        ""
+      ].join("\n");
+      const skillContent = frontmatter + skill.content;
+      await fs.mkdir(skillDir, { recursive: true });
+      await fs.writeFile(path.join(skillDir, "SKILL.md"), skillContent, "utf-8");
+      cache[effectiveSlug] = { version: skill.version, slug: skill.slug };
+      if (cached) {
+        updatedCount++;
+      } else {
+        newCount++;
+      }
+    }
+    let removedCount = 0;
+    for (const cachedSlug of Object.keys(cache)) {
+      if (!currentSlugs.has(cachedSlug)) {
+        const skillDir = path.join(skillsDir, cachedSlug);
+        const resolvedDir = path.resolve(skillDir);
+        if (!resolvedDir.startsWith(resolvedSkillsDir + path.sep)) {
+          delete cache[cachedSlug];
+          continue;
+        }
+        try {
+          await fs.rm(skillDir, { recursive: true, force: true });
+        } catch {
+        }
+        delete cache[cachedSlug];
+        removedCount++;
+      }
+    }
+    if (!(0, import_fs3.existsSync)(CONFIG_DIR)) {
+      (0, import_fs3.mkdirSync)(CONFIG_DIR, { recursive: true });
+    }
+    (0, import_fs3.writeFileSync)(cacheFile, JSON.stringify(cache, null, 2));
+    const output = {
+      success: true,
+      teamId,
+      skillsSynced: skills.length,
+      new: newCount,
+      updated: updatedCount,
+      unchanged: unchangedCount,
+      removed: removedCount,
+      skillsDir,
+      message: `Synced ${skills.length} skills (${newCount} new, ${updatedCount} updated, ${removedCount} removed)`
+    };
+    console.log(JSON.stringify(output, null, 2));
+  } catch (error) {
+    console.error("Error:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+});
+program.command("push-skill").description("Push a local skill file to the team as a draft").option("--team <id>", "Team ID (uses primary team if omitted)").option("--file <path>", "Path to skill file (.md)").option("--title <title>", "Skill title (extracted from frontmatter or filename)").option("--category <cat>", "Category: prompt, checklist, code_pattern, runbook, playbook, other").option("--tags <tags>", "Comma-separated tags").option("--summary <summary>", "Short summary of the skill").action(async (opts) => {
+  try {
+    const auth = await initializeClient();
+    if (!auth) {
+      process.exit(1);
+    }
+    const { client } = auth;
+    if (!opts.file) {
+      console.error("Error: --file is required. Provide a path to a .md file.");
+      process.exit(1);
+    }
+    let content;
+    try {
+      content = (0, import_fs3.readFileSync)(opts.file, "utf-8");
+    } catch (err) {
+      console.error(`Error: Could not read file "${opts.file}": ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    let title = opts.title;
+    let summary = opts.summary;
+    let skillContent = content;
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (fmMatch) {
+      const frontmatter = fmMatch[1];
+      skillContent = fmMatch[2].trim();
+      if (!title) {
+        const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+        title = nameMatch ? nameMatch[1].trim() : void 0;
+      }
+      if (!summary) {
+        const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+        summary = descMatch ? descMatch[1].trim() : void 0;
+      }
+    }
+    if (!title) {
+      title = (0, import_path4.basename)(opts.file).replace(/\.md$/i, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+    let teamId = opts.team;
+    if (!teamId) {
+      const teams = await client.listUserTeams();
+      if (teams.length === 0) {
+        console.error("Error: No teams found. Join or create a team first.");
+        process.exit(1);
+      }
+      teamId = teams[0].id;
+    }
+    const tags = opts.tags ? opts.tags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
+    const result = await client.createTeamSkill({
+      teamId,
+      title,
+      content: skillContent,
+      summary,
+      category: opts.category,
+      tags
+    });
+    const output = {
+      success: true,
+      skillId: result.skillId,
+      slug: result.slug,
+      title,
+      teamId,
+      message: `Created draft skill "${result.slug}" \u2014 submit for review in the web UI`
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {

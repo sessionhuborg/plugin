@@ -1,6 +1,6 @@
 {
   "name": "sessionhub",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Capture and analyze Claude Code sessions with SessionHub. Features auto-capture, context injection, bulk import, and token tracking.",
   "author": {
     "name": "SessionHub",

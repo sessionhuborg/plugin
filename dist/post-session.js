@@ -24942,6 +24942,79 @@ var GrpcAPIClient = class {
     }
   }
   /**
+   * Get approved team skills for syncing to plugin as SKILL.md files.
+   * Only returns approved, team-visible, non-sensitive skills.
+   */
+  async getTeamSkills(teamId, projectId, scope) {
+    return new Promise((resolve, reject) => {
+      const request = { team_id: teamId };
+      if (projectId) request.project_id = projectId;
+      if (scope) request.scope = scope;
+      this.client.getTeamSkills(
+        request,
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            if (this.isNotFoundError(error)) {
+              resolve([]);
+              return;
+            }
+            reject(new Error(this.getErrorMessage(error, "Get team skills")));
+            return;
+          }
+          const skills = (response.skills || []).map((s) => ({
+            id: s.id,
+            slug: s.slug,
+            title: s.title,
+            summary: s.summary || void 0,
+            content: s.content,
+            category: s.category,
+            tags: s.tags || [],
+            scope: s.scope,
+            version: s.version || 1,
+            lastPublishedAt: s.last_published_at || void 0,
+            projectId: s.project_id || void 0
+          }));
+          resolve(skills);
+        }
+      );
+    });
+  }
+  /**
+   * Create a new team skill draft from a local file (plugin → team push).
+   * The skill appears in the web UI as a draft for review.
+   */
+  async createTeamSkill(input) {
+    return new Promise((resolve, reject) => {
+      const request = {
+        team_id: input.teamId,
+        title: input.title,
+        content: input.content
+      };
+      if (input.projectId) request.project_id = input.projectId;
+      if (input.summary) request.summary = input.summary;
+      if (input.category) request.category = input.category;
+      if (input.tags && input.tags.length > 0) request.tags = input.tags;
+      if (input.scope) request.scope = input.scope;
+      this.client.createTeamSkill(
+        request,
+        this.getMetadata(),
+        { deadline: this.getDeadline() },
+        (error, response) => {
+          if (error) {
+            reject(new Error(this.getErrorMessage(error, "Create team skill")));
+            return;
+          }
+          resolve({
+            skillId: response.skill_id,
+            slug: response.slug
+          });
+        }
+      );
+    });
+  }
+  /**
    * Get session quota information for the current user
    * Returns current session count, limit, and remaining capacity
    */

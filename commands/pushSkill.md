@@ -1,0 +1,43 @@
+---
+description: Push a local skill file to the team as a draft for review
+argument-hint: "<file-path> [--title name] [--category type] [--tags a,b,c]"
+allowed-tools: ["Bash(node:*)", "Read", "Glob"]
+---
+
+Push a local SKILL.md or markdown file to the team's Skills Hub as a draft. The skill will appear in the web UI for review and approval.
+
+## Arguments
+- $1: Path to the skill file (required, .md file)
+
+## Instructions
+
+1. **Locate the file**: If $1 is a relative path, resolve it. If $1 is a skill name (no path separator), search for it:
+   - Check `skills/$1/SKILL.md` in the plugin directory
+   - Check `./$1.md` in the current directory
+   - Check `CLAUDE.md` if the user mentions it
+
+2. **Run the push command**:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js push-skill --file "$1"
+```
+
+If additional options were specified by the user, include them:
+- `--title "Skill Name"` - Override the title
+- `--category prompt` - Set category (prompt, checklist, code_pattern, runbook, playbook, other)
+- `--tags "tag1,tag2"` - Add tags
+- `--summary "Brief description"` - Add a summary
+
+3. **Parse the JSON output** and report:
+   - Skill slug and ID
+   - Success message with link to review in the web UI
+
+4. **Handle errors**:
+   - File not found: suggest checking the path
+   - Permission errors: user might be a viewer (cannot create skills)
+   - Other errors: report the error message
+
+## Example Usage
+
+- `/pushSkill skills/error-handling/SKILL.md` - Push a specific skill file
+- `/pushSkill my-checklist.md --category checklist` - Push with category

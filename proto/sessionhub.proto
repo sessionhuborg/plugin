@@ -66,6 +66,16 @@ service SessionHubService {
 
   // User Encryption Keys (for personal sessions)
   rpc GetUserPublicKey(GetUserPublicKeyRequest) returns (GetUserPublicKeyResponse);
+
+  // ============================================================================
+  // Team Skills (sync between web UI and plugin)
+  // ============================================================================
+
+  // Get approved team skills for syncing to plugin as SKILL.md files
+  rpc GetTeamSkills(GetTeamSkillsRequest) returns (GetTeamSkillsResponse);
+
+  // Create a team skill draft from the plugin (local → team push)
+  rpc CreateTeamSkill(CreateTeamSkillRequest) returns (CreateTeamSkillResponse);
 }
 
 // ============================================================================
@@ -622,4 +632,48 @@ message GetUserPublicKeyRequest {
 message GetUserPublicKeyResponse {
   string public_key = 1;
   int32 key_version = 2;
+}
+
+// ============================================================================
+// Team Skills Messages
+// ============================================================================
+
+message GetTeamSkillsRequest {
+  string team_id = 1;
+  optional string project_id = 2;     // Filter by project (optional)
+  optional string scope = 3;           // Filter: "team" or "project" (optional)
+}
+
+message TeamSkillProto {
+  string id = 1;
+  string slug = 2;
+  string title = 3;
+  optional string summary = 4;
+  string content = 5;
+  string category = 6;
+  repeated string tags = 7;
+  string scope = 8;
+  int32 version = 9;
+  optional string last_published_at = 10;
+  optional string project_id = 11;
+}
+
+message GetTeamSkillsResponse {
+  repeated TeamSkillProto skills = 1;
+}
+
+message CreateTeamSkillRequest {
+  string team_id = 1;
+  optional string project_id = 2;
+  string title = 3;
+  string content = 4;
+  optional string summary = 5;
+  optional string category = 6;
+  repeated string tags = 7;
+  optional string scope = 8;          // "team" (default) or "project"
+}
+
+message CreateTeamSkillResponse {
+  string skill_id = 1;
+  string slug = 2;
 }

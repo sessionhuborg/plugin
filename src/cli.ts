@@ -667,6 +667,270 @@ program
 // when sessions are captured, based on user preferences.
 // Users can configure auto-analysis settings in the SessionHub web app.
 
+// ============================================================================
+// Team Skills - Sync & Push
+// ============================================================================
+
+program
+  .command('sync-skills')
+  .description('Sync approved team skills as SKILL.md files for Claude Code')
+  .option('--team <id>', 'Team ID (uses primary team if omitted)')
+  .option('--project <id>', 'Filter by project ID')
+  .option('--scope <scope>', 'Filter by scope: team or project')
+  .action(async (opts) => {
+    try {
+      const auth = await initializeClient();
+      if (!auth) {
+        process.exit(1);
+      }
+
+      const { client } = auth;
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Resolve team ID
+      let teamId = opts.team;
+      let teamSlug: string | undefined;
+      if (!teamId) {
+        const teams = await client.listUserTeams();
+        if (teams.length === 0) {
+          console.error('Error: No teams found. Join or create a team first.');
+          process.exit(1);
+        }
+        teamId = teams[0].id;
+        teamSlug = teams[0].slug;
+      }
+
+      // Fetch approved skills
+      const skills = await client.getTeamSkills(teamId, opts.project, opts.scope);
+
+      // Determine plugin skills directory
+      const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..');
+      const skillsDir = path.join(pluginRoot, 'skills');
+
+      // Ensure skills directory exists
+      await fs.mkdir(skillsDir, { recursive: true });
+
+      // Read existing synced skills from cache
+      const cacheFile = join(CONFIG_DIR, 'skills-cache.json');
+      let cache: Record<string, { version: number; slug: string }> = {};
+      try {
+        const cacheData = await fs.readFile(cacheFile, 'utf-8');
+        cache = JSON.parse(cacheData);
+      } catch {
+        // No cache yet
+      }
+
+      // Track what we're syncing
+      const currentSlugs = new Set<string>();
+      let newCount = 0;
+      let updatedCount = 0;
+      let unchangedCount = 0;
+
+      // Resolve skillsDir to absolute path for path traversal checks
+      const resolvedSkillsDir = path.resolve(skillsDir);
+
+      // Write each skill as skills/{slug}/SKILL.md
+      for (const skill of skills) {
+        // Namespace project-scoped skills to avoid slug collisions
+        const effectiveSlug = skill.scope === 'project' && skill.projectId
+          ? `${teamSlug || teamId.slice(0, 8)}-${skill.projectId.slice(0, 8)}-${skill.slug}`
+          : skill.slug;
+
+        // Path traversal protection: ensure slug doesn't escape skillsDir
+        const skillDir = path.join(skillsDir, effectiveSlug);
+        const resolvedDir = path.resolve(skillDir);
+        if (!resolvedDir.startsWith(resolvedSkillsDir + path.sep)) {
+          logger.warn(`Skipping skill with unsafe slug: ${effectiveSlug}`);
+          continue;
+        }
+
+        currentSlugs.add(effectiveSlug);
+
+        // Check if skill is already synced at this version
+        const cached = cache[effectiveSlug];
+        if (cached && cached.version === skill.version) {
+          unchangedCount++;
+          continue;
+        }
+
+        // Build SKILL.md content with frontmatter (quote description for YAML safety)
+        const description = (skill.summary || skill.title).replace(/\n/g, ' ').replace(/"/g, '\\"');
+        const frontmatter = [
+          '---',
+          `name: ${effectiveSlug}`,
+          `description: "${description}"`,
+          '---',
+          '',
+        ].join('\n');
+
+        const skillContent = frontmatter + skill.content;
+
+        // Write to skills/{slug}/SKILL.md
+        await fs.mkdir(skillDir, { recursive: true });
+        await fs.writeFile(path.join(skillDir, 'SKILL.md'), skillContent, 'utf-8');
+
+        // Update cache
+        cache[effectiveSlug] = { version: skill.version, slug: skill.slug };
+
+        if (cached) {
+          updatedCount++;
+        } else {
+          newCount++;
+        }
+      }
+
+      // Remove skills that no longer exist on the server
+      let removedCount = 0;
+      for (const cachedSlug of Object.keys(cache)) {
+        if (!currentSlugs.has(cachedSlug)) {
+          const skillDir = path.join(skillsDir, cachedSlug);
+          // Path traversal protection on removal too
+          const resolvedDir = path.resolve(skillDir);
+          if (!resolvedDir.startsWith(resolvedSkillsDir + path.sep)) {
+            delete cache[cachedSlug];
+            continue;
+          }
+          try {
+            await fs.rm(skillDir, { recursive: true, force: true });
+          } catch {
+            // Ignore removal errors
+          }
+          delete cache[cachedSlug];
+          removedCount++;
+        }
+      }
+
+      // Persist updated cache
+      if (!existsSync(CONFIG_DIR)) {
+        mkdirSync(CONFIG_DIR, { recursive: true });
+      }
+      writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+
+      const output = {
+        success: true,
+        teamId,
+        skillsSynced: skills.length,
+        new: newCount,
+        updated: updatedCount,
+        unchanged: unchangedCount,
+        removed: removedCount,
+        skillsDir,
+        message: skills.length === 0
+          ? `No approved team skills found; removed ${removedCount} previously synced skills`
+          : `Synced ${skills.length} skills (${newCount} new, ${updatedCount} updated, ${removedCount} removed)`,
+      };
+
+      console.log(JSON.stringify(output, null, 2));
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('push-skill')
+  .description('Push a local skill file to the team as a draft')
+  .option('--team <id>', 'Team ID (uses primary team if omitted)')
+  .option('--file <path>', 'Path to skill file (.md)')
+  .option('--title <title>', 'Skill title (extracted from frontmatter or filename)')
+  .option('--category <cat>', 'Category: prompt, checklist, code_pattern, runbook, playbook, other')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--summary <summary>', 'Short summary of the skill')
+  .action(async (opts) => {
+    try {
+      const auth = await initializeClient();
+      if (!auth) {
+        process.exit(1);
+      }
+
+      const { client } = auth;
+
+      if (!opts.file) {
+        console.error('Error: --file is required. Provide a path to a .md file.');
+        process.exit(1);
+      }
+
+      // Read the file
+      let content: string;
+      try {
+        content = readFileSync(opts.file, 'utf-8');
+      } catch (err) {
+        console.error(`Error: Could not read file "${opts.file}": ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+
+      // Parse frontmatter if present
+      let title = opts.title;
+      let summary = opts.summary;
+      let skillContent = content;
+
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+      if (fmMatch) {
+        const frontmatter = fmMatch[1];
+        skillContent = fmMatch[2].trim();
+
+        // Extract fields from frontmatter
+        if (!title) {
+          const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+          title = nameMatch ? nameMatch[1].trim() : undefined;
+        }
+        if (!summary) {
+          const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+          summary = descMatch ? descMatch[1].trim() : undefined;
+        }
+      }
+
+      // Fallback title from filename
+      if (!title) {
+        title = basename(opts.file)
+          .replace(/\.md$/i, '')
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, (c: string) => c.toUpperCase());
+      }
+
+      // Resolve team ID
+      let teamId = opts.team;
+      if (!teamId) {
+        const teams = await client.listUserTeams();
+        if (teams.length === 0) {
+          console.error('Error: No teams found. Join or create a team first.');
+          process.exit(1);
+        }
+        teamId = teams[0].id;
+      }
+
+      // Parse tags
+      const tags = opts.tags
+        ? opts.tags.split(',').map((t: string) => t.trim().toLowerCase()).filter(Boolean)
+        : [];
+
+      // Push to team
+      const result = await client.createTeamSkill({
+        teamId,
+        title,
+        content: skillContent,
+        summary,
+        category: opts.category,
+        tags,
+      });
+
+      const output = {
+        success: true,
+        skillId: result.skillId,
+        slug: result.slug,
+        title,
+        teamId,
+        message: `Created draft skill "${result.slug}" — submit for review in the web UI`,
+      };
+
+      console.log(JSON.stringify(output, null, 2));
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  });
+
 // Health check command - verify plugin configuration and connectivity
 program
   .command('health')
