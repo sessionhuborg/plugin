@@ -656,6 +656,7 @@ message TeamSkillProto {
   int32 version = 9;
   optional string last_published_at = 10;
   optional string project_id = 11;
+  map<string, string> files = 12;
 }
 
 message GetTeamSkillsResponse {
@@ -671,6 +672,7 @@ message CreateTeamSkillRequest {
   optional string category = 6;
   repeated string tags = 7;
   optional string scope = 8;          // "team" (default) or "project"
+  map<string, string> files = 9;
 }
 
 message CreateTeamSkillResponse {

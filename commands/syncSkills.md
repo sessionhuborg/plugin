@@ -1,10 +1,10 @@
 ---
-description: Sync approved team skills from SessionHub as native SKILL.md files
+description: Sync approved team skills from SessionHub to ~/.claude/skills/
 argument-hint: "[--team team-id] [--project project-id]"
 allowed-tools: ["Bash(node:*)"]
 ---
 
-Sync approved team skills from SessionHub to the local plugin as native SKILL.md files. Once synced, Claude Code auto-discovers these skills and loads them JIT when contextually relevant.
+Sync approved team skills from SessionHub to `~/.claude/skills/` — the standard Claude Code personal skills directory. All skills are namespaced by team slug to prevent cross-team collisions. Once synced, Claude Code auto-discovers these skills and loads them JIT when contextually relevant.
 
 ## Arguments
 - $1: Team ID (optional, uses primary team if omitted)
@@ -30,8 +30,8 @@ node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js sync-skills ${1:+--team "$1"}
 ## What Happens
 
 - Fetches all **approved**, **team-visible**, **non-sensitive** skills via gRPC
-- Writes each skill as `skills/{slug}/SKILL.md` in the plugin directory
-- Claude Code auto-discovers these and loads them when relevant
+- Writes each skill as `~/.claude/skills/{teamSlug}-{slug}/SKILL.md`
+- Claude Code auto-discovers these from its standard skills directory
 - Removes local skills that were deleted/archived on the server
 - Caches versions to skip unchanged skills on re-sync
 

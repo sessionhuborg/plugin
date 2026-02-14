@@ -4,13 +4,13 @@
  * High-performance gRPC client using Protocol Buffers for 6-10x faster processing.
  */
 
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import type { SessionApiData, UserInfo, ApiInteractionData } from './models.js';
-import { logger } from './logger.js';
-import { encryptSessionFields, isValidPublicKey } from './encryption.js';
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import type { SessionApiData, UserInfo, ApiInteractionData } from "./models.js";
+import { logger } from "./logger.js";
+import { encryptSessionFields, isValidPublicKey } from "./encryption.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,22 +19,34 @@ export class GrpcAPIClient {
   private client: any;
   private apiKey: string;
   private backendUrl: string;
-  private teamKeyCache: { teamId: string; publicKey: string; keyVersion: number; fetchedAt: number } | null = null;
+  private teamKeyCache: {
+    teamId: string;
+    publicKey: string;
+    keyVersion: number;
+    fetchedAt: number;
+  } | null = null;
   private teamKeyCacheTtlMs = 5 * 60 * 1000;
 
-  constructor(apiKey: string, backendUrl: string = 'localhost:50051', useTls?: boolean) {
+  constructor(
+    apiKey: string,
+    backendUrl: string = "localhost:50051",
+    useTls?: boolean,
+  ) {
     this.apiKey = apiKey;
     // Add default port if not specified (443 for remote, 50051 for localhost)
-    const isLocalhost = backendUrl.startsWith('localhost') || backendUrl.startsWith('127.0.0.1');
-    if (!backendUrl.includes(':')) {
-      this.backendUrl = isLocalhost ? `${backendUrl}:50051` : `${backendUrl}:443`;
+    const isLocalhost =
+      backendUrl.startsWith("localhost") || backendUrl.startsWith("127.0.0.1");
+    if (!backendUrl.includes(":")) {
+      this.backendUrl = isLocalhost
+        ? `${backendUrl}:50051`
+        : `${backendUrl}:443`;
     } else {
       this.backendUrl = backendUrl;
     }
 
     // Load protobuf definition - bundled with plugin
     // From dist/ folder: .. gets to sessionhub-plugin/proto/
-    const PROTO_PATH = join(__dirname, '..', 'proto/sessionhub.proto');
+    const PROTO_PATH = join(__dirname, "..", "proto/sessionhub.proto");
 
     const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
       keepCase: true,
@@ -44,11 +56,15 @@ export class GrpcAPIClient {
       oneofs: true,
     });
 
-    const protoDescriptor = grpc.loadPackageDefinition(packageDefinition) as any;
+    const protoDescriptor = grpc.loadPackageDefinition(
+      packageDefinition,
+    ) as any;
     const sessionhub = protoDescriptor.sessionhub;
 
     // Auto-detect TLS: use secure for non-localhost, insecure for localhost
-    const isLocalhostForTls = this.backendUrl.startsWith('localhost') || this.backendUrl.startsWith('127.0.0.1');
+    const isLocalhostForTls =
+      this.backendUrl.startsWith("localhost") ||
+      this.backendUrl.startsWith("127.0.0.1");
     const shouldUseTls = useTls ?? !isLocalhostForTls;
 
     const credentials = shouldUseTls
@@ -57,15 +73,17 @@ export class GrpcAPIClient {
 
     this.client = new sessionhub.SessionHubService(
       this.backendUrl,
-      credentials
+      credentials,
     );
 
-    logger.info(`gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`);
+    logger.info(
+      `gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`,
+    );
   }
 
   private getMetadata(): grpc.Metadata {
     const metadata = new grpc.Metadata();
-    metadata.add('authorization', `Bearer ${this.apiKey}`);
+    metadata.add("authorization", `Bearer ${this.apiKey}`);
     return metadata;
   }
 
@@ -109,15 +127,16 @@ export class GrpcAPIClient {
   }
 
   private transformAttachmentMetadata(attachments: any[]): any[] {
-    return attachments.map(att => ({
-      type: att.type || 'image',
-      storage_path: att.storagePath || att.storage_path || '',
-      public_url: att.publicUrl || att.public_url || '',
-      media_type: att.mediaType || att.media_type || '',
-      filename: att.filename || '',
+    return attachments.map((att) => ({
+      type: att.type || "image",
+      storage_path: att.storagePath || att.storage_path || "",
+      public_url: att.publicUrl || att.public_url || "",
+      media_type: att.mediaType || att.media_type || "",
+      filename: att.filename || "",
       size_bytes: att.sizeBytes || att.size_bytes || 0,
       interaction_index: att.interactionIndex ?? att.interaction_index ?? 0,
-      uploaded_at: att.uploadedAt || att.uploaded_at || new Date().toISOString(),
+      uploaded_at:
+        att.uploadedAt || att.uploaded_at || new Date().toISOString(),
     }));
   }
 
@@ -129,12 +148,17 @@ export class GrpcAPIClient {
         (error: grpc.ServiceError | null, response: any) => {
           if (error) {
             // NOT_FOUND or UNAUTHENTICATED means invalid API key - expected, return null
-            if (this.isNotFoundError(error) || error.code === grpc.status.UNAUTHENTICATED) {
+            if (
+              this.isNotFoundError(error) ||
+              error.code === grpc.status.UNAUTHENTICATED
+            ) {
               resolve(null);
               return;
             }
             // Other errors (timeout, unavailable) should reject with friendly message
-            reject(new Error(this.getErrorMessage(error, 'API key validation')));
+            reject(
+              new Error(this.getErrorMessage(error, "API key validation")),
+            );
             return;
           }
 
@@ -143,7 +167,7 @@ export class GrpcAPIClient {
             email: response.email,
             subscriptionTier: response.subscription_tier,
           });
-        }
+        },
       );
     });
   }
@@ -183,11 +207,11 @@ export class GrpcAPIClient {
             github_default_branch: p.github_default_branch,
             github_connected_at: p.github_connected_at,
             // Encryption mode: "enhanced" (default), "hybrid_e2e", or "full_e2e"
-            encryption_mode: p.encryption_mode || 'enhanced',
+            encryption_mode: p.encryption_mode || "enhanced",
           }));
 
           resolve(projects);
-        }
+        },
       );
     });
   }
@@ -216,31 +240,38 @@ export class GrpcAPIClient {
             display_name: response.display_name,
             ...response,
           });
-        }
+        },
       );
     });
   }
 
-  private determineSessionType(sessionName?: string, gitBranch?: string): string {
-    const text = `${sessionName || ''} ${gitBranch || ''}`.toLowerCase();
+  private determineSessionType(
+    sessionName?: string,
+    gitBranch?: string,
+  ): string {
+    const text = `${sessionName || ""} ${gitBranch || ""}`.toLowerCase();
 
-    if (text.includes('bug') || text.includes('fix') || text.includes('hotfix')) {
-      return 'bugfix';
+    if (
+      text.includes("bug") ||
+      text.includes("fix") ||
+      text.includes("hotfix")
+    ) {
+      return "bugfix";
     }
-    if (text.includes('refactor')) {
-      return 'refactor';
+    if (text.includes("refactor")) {
+      return "refactor";
     }
-    if (text.includes('explore') || text.includes('experiment')) {
-      return 'exploration';
+    if (text.includes("explore") || text.includes("experiment")) {
+      return "exploration";
     }
-    if (text.includes('debug')) {
-      return 'debugging';
+    if (text.includes("debug")) {
+      return "debugging";
     }
-    if (text.includes('feature')) {
-      return 'feature';
+    if (text.includes("feature")) {
+      return "feature";
     }
 
-    return 'feature';
+    return "feature";
   }
 
   async createSession(sessionData: SessionApiData): Promise<string | null> {
@@ -248,9 +279,9 @@ export class GrpcAPIClient {
       const serializedMetadata: Record<string, string> = {};
       if (sessionData.metadata) {
         for (const [key, value] of Object.entries(sessionData.metadata)) {
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             serializedMetadata[key] = value;
-          } else if (typeof value === 'number' || typeof value === 'boolean') {
+          } else if (typeof value === "number" || typeof value === "boolean") {
             serializedMetadata[key] = String(value);
           } else if (value === null || value === undefined) {
             serializedMetadata[key] = String(value);
@@ -260,24 +291,34 @@ export class GrpcAPIClient {
         }
       }
 
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0
-        ? sessionData.todo_snapshots
-            .filter(snapshot => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0)
-            .map(snapshot => ({
-              timestamp: snapshot.timestamp,
-              todos: snapshot.todos.map(todo => ({
-                content: todo.content,
-                status: todo.status,
-                active_form: todo.activeForm
+      const transformedTodoSnapshots =
+        sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0
+          ? sessionData.todo_snapshots
+              .filter(
+                (snapshot) =>
+                  snapshot.timestamp &&
+                  Array.isArray(snapshot.todos) &&
+                  snapshot.todos.length > 0,
+              )
+              .map((snapshot) => ({
+                timestamp: snapshot.timestamp,
+                todos: snapshot.todos.map((todo) => ({
+                  content: todo.content,
+                  status: todo.status,
+                  active_form: todo.activeForm,
+                })),
               }))
-            }))
-        : [];
+          : [];
 
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch,
+      );
 
-      const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0
-        ? JSON.stringify(sessionData.sub_sessions)
-        : undefined;
+      const subSessionsJson =
+        sessionData.sub_sessions && sessionData.sub_sessions.length > 0
+          ? JSON.stringify(sessionData.sub_sessions)
+          : undefined;
 
       const request = {
         project_name: sessionData.project_name,
@@ -293,9 +334,10 @@ export class GrpcAPIClient {
         cache_create_tokens: sessionData.cache_create_tokens || 0,
         cache_read_tokens: sessionData.cache_read_tokens || 0,
         todo_snapshots: transformedTodoSnapshots,
-        attachment_urls: sessionData.attachment_urls && sessionData.attachment_urls.length > 0
-          ? this.transformAttachmentMetadata(sessionData.attachment_urls)
-          : [],
+        attachment_urls:
+          sessionData.attachment_urls && sessionData.attachment_urls.length > 0
+            ? this.transformAttachmentMetadata(sessionData.attachment_urls)
+            : [],
         sub_sessions_json: subSessionsJson,
         interactions: sessionData.interactions || [],
         metadata: serializedMetadata,
@@ -313,7 +355,7 @@ export class GrpcAPIClient {
 
           logger.info(`Session created: ${response.session_id}`);
           resolve(response.session_id);
-        }
+        },
       );
     });
   }
@@ -327,24 +369,32 @@ export class GrpcAPIClient {
   }> {
     // STEP 1: Get the project to check its encryption mode
     // Only encrypt for hybrid_e2e and full_e2e modes, NOT for enhanced mode
-    let encryptionMode = 'enhanced'; // Default to enhanced (no E2E encryption)
+    let encryptionMode = "enhanced"; // Default to enhanced (no E2E encryption)
 
     try {
       const projects = await this.getProjects();
-      const project = projects.find((p: any) => p.name === sessionData.project_name);
+      const project = projects.find(
+        (p: any) => p.name === sessionData.project_name,
+      );
       if (project) {
-        encryptionMode = project.encryption_mode || 'enhanced';
+        encryptionMode = project.encryption_mode || "enhanced";
         logger.info(`Project encryption mode: ${encryptionMode}`);
       } else {
         // Project doesn't exist yet - will be created with default mode (enhanced)
-        logger.info('Project not found, will use default encryption mode (enhanced)');
+        logger.info(
+          "Project not found, will use default encryption mode (enhanced)",
+        );
       }
     } catch (error) {
-      logger.warn('Failed to fetch projects for encryption mode check, using enhanced:', error);
+      logger.warn(
+        "Failed to fetch projects for encryption mode check, using enhanced:",
+        error,
+      );
     }
 
     // STEP 2: Only encrypt for E2E modes (hybrid_e2e or full_e2e)
-    const shouldEncrypt = encryptionMode === 'hybrid_e2e' || encryptionMode === 'full_e2e';
+    const shouldEncrypt =
+      encryptionMode === "hybrid_e2e" || encryptionMode === "full_e2e";
     let publicKey: string | null = null;
     let keyVersion = 0;
     let encryptedFields: any = null;
@@ -353,51 +403,74 @@ export class GrpcAPIClient {
       try {
         // Prefer team public key for E2E encryption
         const teamKeyData = await this.getPrimaryTeamKey();
-        if (teamKeyData?.publicKey && await isValidPublicKey(teamKeyData.publicKey)) {
+        if (
+          teamKeyData?.publicKey &&
+          (await isValidPublicKey(teamKeyData.publicKey))
+        ) {
           publicKey = teamKeyData.publicKey;
           keyVersion = teamKeyData.keyVersion;
-          logger.info(`Using team encryption key for E2E mode: ${encryptionMode}`);
+          logger.info(
+            `Using team encryption key for E2E mode: ${encryptionMode}`,
+          );
         } else {
           // Fallback to user's key for legacy personal sessions
           const keyData = await this.getUserPublicKey();
-          if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
+          if (
+            keyData?.publicKey &&
+            (await isValidPublicKey(keyData.publicKey))
+          ) {
             publicKey = keyData.publicKey;
             keyVersion = keyData.keyVersion;
-            logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
+            logger.warn(
+              `Falling back to personal encryption key for E2E mode: ${encryptionMode}`,
+            );
           }
         }
 
         // E2E mode requires a valid encryption key - fail fast if missing
         if (!publicKey) {
-          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
+          throw new Error(
+            `E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`,
+          );
         }
 
         // Encrypt sensitive fields
-        encryptedFields = await encryptSessionFields({
-          interactions: sessionData.interactions,
-          todoSnapshots: sessionData.todo_snapshots,
-          subSessions: sessionData.sub_sessions,
-          attachmentUrls: sessionData.attachment_urls,
-        }, publicKey);
-        logger.info('Session data encrypted successfully');
+        encryptedFields = await encryptSessionFields(
+          {
+            interactions: sessionData.interactions,
+            todoSnapshots: sessionData.todo_snapshots,
+            subSessions: sessionData.sub_sessions,
+            attachmentUrls: sessionData.attachment_urls,
+          },
+          publicKey,
+        );
+        logger.info("Session data encrypted successfully");
       } catch (error) {
         // For E2E modes, encryption failure is critical - do NOT continue with plaintext
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
-        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        logger.error(
+          `Failed to encrypt session data for ${encryptionMode} mode:`,
+          error,
+        );
+        throw new Error(
+          `Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`,
+        );
       }
     } else {
       // Enhanced mode: send plaintext (Supabase encrypts at rest automatically)
-      logger.info('Enhanced mode: sending plaintext (server handles encryption at rest)');
+      logger.info(
+        "Enhanced mode: sending plaintext (server handles encryption at rest)",
+      );
     }
 
     return new Promise((resolve, reject) => {
       const serializedMetadata: Record<string, string> = {};
       if (sessionData.metadata) {
         for (const [key, value] of Object.entries(sessionData.metadata)) {
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             serializedMetadata[key] = value;
-          } else if (typeof value === 'number' || typeof value === 'boolean') {
+          } else if (typeof value === "number" || typeof value === "boolean") {
             serializedMetadata[key] = String(value);
           } else if (value === null || value === undefined) {
             serializedMetadata[key] = String(value);
@@ -407,24 +480,34 @@ export class GrpcAPIClient {
         }
       }
 
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0
-        ? sessionData.todo_snapshots
-            .filter(snapshot => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0)
-            .map(snapshot => ({
-              timestamp: snapshot.timestamp,
-              todos: snapshot.todos.map(todo => ({
-                content: todo.content,
-                status: todo.status,
-                active_form: todo.activeForm
+      const transformedTodoSnapshots =
+        sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0
+          ? sessionData.todo_snapshots
+              .filter(
+                (snapshot) =>
+                  snapshot.timestamp &&
+                  Array.isArray(snapshot.todos) &&
+                  snapshot.todos.length > 0,
+              )
+              .map((snapshot) => ({
+                timestamp: snapshot.timestamp,
+                todos: snapshot.todos.map((todo) => ({
+                  content: todo.content,
+                  status: todo.status,
+                  active_form: todo.activeForm,
+                })),
               }))
-            }))
-        : [];
+          : [];
 
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch,
+      );
 
-      const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0
-        ? JSON.stringify(sessionData.sub_sessions)
-        : undefined;
+      const subSessionsJson =
+        sessionData.sub_sessions && sessionData.sub_sessions.length > 0
+          ? JSON.stringify(sessionData.sub_sessions)
+          : undefined;
 
       // Build request - if encrypted, send encrypted fields and mark plaintext fields as empty
       const isEncrypted = encryptedFields !== null;
@@ -451,12 +534,14 @@ export class GrpcAPIClient {
 
       if (isEncrypted) {
         // Send encrypted data
-        request.encryption_status = 'encrypted';
+        request.encryption_status = "encrypted";
         request.encryption_version = keyVersion;
         request.encrypted_interactions = encryptedFields.encryptedInteractions;
-        request.encrypted_todo_snapshots = encryptedFields.encryptedTodoSnapshots;
+        request.encrypted_todo_snapshots =
+          encryptedFields.encryptedTodoSnapshots;
         request.encrypted_sub_sessions = encryptedFields.encryptedSubSessions;
-        request.encrypted_attachment_urls = encryptedFields.encryptedAttachmentUrls;
+        request.encrypted_attachment_urls =
+          encryptedFields.encryptedAttachmentUrls;
         // Empty arrays for plaintext fields (backend stores encrypted versions)
         request.todo_snapshots = [];
         request.attachment_urls = [];
@@ -464,38 +549,44 @@ export class GrpcAPIClient {
         request.sub_sessions_json = undefined;
       } else {
         // Send plaintext data
-        request.encryption_status = 'plaintext';
+        request.encryption_status = "plaintext";
         request.encryption_version = 0;
         request.todo_snapshots = transformedTodoSnapshots;
-        request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0
-          ? this.transformAttachmentMetadata(sessionData.attachment_urls)
-          : [];
+        request.attachment_urls =
+          sessionData.attachment_urls && sessionData.attachment_urls.length > 0
+            ? this.transformAttachmentMetadata(sessionData.attachment_urls)
+            : [];
         request.sub_sessions_json = subSessionsJson;
-        request.interactions = (sessionData.interactions || []).map((int: any) => {
-          const serializedInteractionMetadata: Record<string, string> = {};
-          if (int.metadata) {
-            for (const [key, value] of Object.entries(int.metadata)) {
-              if (typeof value === 'string') {
-                serializedInteractionMetadata[key] = value;
-              } else if (typeof value === 'number' || typeof value === 'boolean') {
-                serializedInteractionMetadata[key] = String(value);
-              } else if (value === null || value === undefined) {
-                serializedInteractionMetadata[key] = String(value);
-              } else {
-                serializedInteractionMetadata[key] = JSON.stringify(value);
+        request.interactions = (sessionData.interactions || []).map(
+          (int: any) => {
+            const serializedInteractionMetadata: Record<string, string> = {};
+            if (int.metadata) {
+              for (const [key, value] of Object.entries(int.metadata)) {
+                if (typeof value === "string") {
+                  serializedInteractionMetadata[key] = value;
+                } else if (
+                  typeof value === "number" ||
+                  typeof value === "boolean"
+                ) {
+                  serializedInteractionMetadata[key] = String(value);
+                } else if (value === null || value === undefined) {
+                  serializedInteractionMetadata[key] = String(value);
+                } else {
+                  serializedInteractionMetadata[key] = JSON.stringify(value);
+                }
               }
             }
-          }
-          return {
-            timestamp: int.timestamp,
-            interaction_type: int.interaction_type,
-            content: int.content,
-            tool_name: int.tool_name,
-            metadata: serializedInteractionMetadata,
-            input_tokens: int.input_tokens || 0,
-            output_tokens: int.output_tokens || 0,
-          };
-        });
+            return {
+              timestamp: int.timestamp,
+              interaction_type: int.interaction_type,
+              content: int.content,
+              tool_name: int.tool_name,
+              metadata: serializedInteractionMetadata,
+              input_tokens: int.input_tokens || 0,
+              output_tokens: int.output_tokens || 0,
+            };
+          },
+        );
       }
 
       this.client.upsertSession(
@@ -508,14 +599,18 @@ export class GrpcAPIClient {
             return;
           }
 
-          const action = response.was_updated ? 'updated' : 'created';
-          const encryptionNote = isEncrypted ? ' (encrypted)' : '';
-          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`);
+          const action = response.was_updated ? "updated" : "created";
+          const encryptionNote = isEncrypted ? " (encrypted)" : "";
+          logger.info(
+            `Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`,
+          );
           if (response.analysis_triggered) {
-            logger.info('Analysis triggered based on user preferences');
+            logger.info("Analysis triggered based on user preferences");
           }
           if (response.observations_triggered) {
-            logger.info('Observations extraction triggered based on user preferences');
+            logger.info(
+              "Observations extraction triggered based on user preferences",
+            );
           }
           resolve({
             sessionId: response.session_id,
@@ -524,12 +619,15 @@ export class GrpcAPIClient {
             analysisTriggered: response.analysis_triggered || false,
             observationsTriggered: response.observations_triggered || false,
           });
-        }
+        },
       );
     });
   }
 
-  async updateSessionEndTime(sessionId: string, endTime: string): Promise<boolean> {
+  async updateSessionEndTime(
+    sessionId: string,
+    endTime: string,
+  ): Promise<boolean> {
     return new Promise((resolve, reject) => {
       this.client.updateSession(
         {
@@ -546,7 +644,7 @@ export class GrpcAPIClient {
 
           logger.info(`Session end time updated: ${sessionId}`);
           resolve(true);
-        }
+        },
       );
     });
   }
@@ -554,7 +652,7 @@ export class GrpcAPIClient {
   async addInteractionsBatch(
     sessionId: string,
     interactions: ApiInteractionData[],
-    chunkSize: number = 500
+    chunkSize: number = 500,
   ): Promise<{ success: boolean; processed: number; failed: number }> {
     let totalProcessed = 0;
     let totalFailed = 0;
@@ -562,55 +660,64 @@ export class GrpcAPIClient {
     for (let i = 0; i < interactions.length; i += chunkSize) {
       const chunk = interactions.slice(i, i + chunkSize);
 
-      const result = await new Promise<{ processed: number; failed: number }>((resolve, reject) => {
-        this.client.addInteractionsBatch(
-          {
-            session_id: sessionId,
-            interactions: chunk.map((int) => {
-              const serializedMetadata: Record<string, string> = {};
-              if (int.metadata) {
-                for (const [key, value] of Object.entries(int.metadata)) {
-                  if (typeof value === 'string') {
-                    serializedMetadata[key] = value;
-                  } else if (typeof value === 'number' || typeof value === 'boolean') {
-                    serializedMetadata[key] = String(value);
-                  } else if (value === null || value === undefined) {
-                    serializedMetadata[key] = String(value);
-                  } else {
-                    serializedMetadata[key] = JSON.stringify(value);
+      const result = await new Promise<{ processed: number; failed: number }>(
+        (resolve, reject) => {
+          this.client.addInteractionsBatch(
+            {
+              session_id: sessionId,
+              interactions: chunk.map((int) => {
+                const serializedMetadata: Record<string, string> = {};
+                if (int.metadata) {
+                  for (const [key, value] of Object.entries(int.metadata)) {
+                    if (typeof value === "string") {
+                      serializedMetadata[key] = value;
+                    } else if (
+                      typeof value === "number" ||
+                      typeof value === "boolean"
+                    ) {
+                      serializedMetadata[key] = String(value);
+                    } else if (value === null || value === undefined) {
+                      serializedMetadata[key] = String(value);
+                    } else {
+                      serializedMetadata[key] = JSON.stringify(value);
+                    }
                   }
                 }
+
+                return {
+                  timestamp: int.timestamp,
+                  interaction_type: int.interaction_type,
+                  content: int.content,
+                  tool_name: int.tool_name,
+                  metadata: serializedMetadata,
+                  input_tokens: int.input_tokens || 0,
+                  output_tokens: int.output_tokens || 0,
+                };
+              }),
+            },
+            this.getMetadata(),
+            { deadline: this.getDeadline(60) }, // Longer timeout for batch operations
+            (error: grpc.ServiceError | null, response: any) => {
+              if (error) {
+                logger.error(
+                  `Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`,
+                );
+                // Don't reject, just return failed count to allow other batches to continue
+                resolve({ processed: 0, failed: chunk.length });
+                return;
               }
 
-              return {
-                timestamp: int.timestamp,
-                interaction_type: int.interaction_type,
-                content: int.content,
-                tool_name: int.tool_name,
-                metadata: serializedMetadata,
-                input_tokens: int.input_tokens || 0,
-                output_tokens: int.output_tokens || 0,
-              };
-            }),
-          },
-          this.getMetadata(),
-          { deadline: this.getDeadline(60) }, // Longer timeout for batch operations
-          (error: grpc.ServiceError | null, response: any) => {
-            if (error) {
-              logger.error(`Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`);
-              // Don't reject, just return failed count to allow other batches to continue
-              resolve({ processed: 0, failed: chunk.length });
-              return;
-            }
-
-            logger.info(`Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`);
-            resolve({
-              processed: response.processed,
-              failed: response.failed,
-            });
-          }
-        );
-      });
+              logger.info(
+                `Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`,
+              );
+              resolve({
+                processed: response.processed,
+                failed: response.failed,
+              });
+            },
+          );
+        },
+      );
 
       totalProcessed += result.processed;
       totalFailed += result.failed;
@@ -625,7 +732,7 @@ export class GrpcAPIClient {
 
   async streamInteractions(
     sessionId: string,
-    interactions: ApiInteractionData[]
+    interactions: ApiInteractionData[],
   ): Promise<{ success: boolean; processed: number; failed: number }> {
     return new Promise((resolve, reject) => {
       const call = this.client.streamInteractions(
@@ -643,16 +750,19 @@ export class GrpcAPIClient {
             processed: response.processed,
             failed: response.failed,
           });
-        }
+        },
       );
 
       for (const interaction of interactions) {
         const serializedMetadata: Record<string, string> = {};
         if (interaction.metadata) {
           for (const [key, value] of Object.entries(interaction.metadata)) {
-            if (typeof value === 'string') {
+            if (typeof value === "string") {
               serializedMetadata[key] = value;
-            } else if (typeof value === 'number' || typeof value === 'boolean') {
+            } else if (
+              typeof value === "number" ||
+              typeof value === "boolean"
+            ) {
               serializedMetadata[key] = String(value);
             } else if (value === null || value === undefined) {
               serializedMetadata[key] = String(value);
@@ -708,7 +818,9 @@ export class GrpcAPIClient {
               resolve(null);
               return;
             }
-            reject(new Error(`Failed to get user preferences: ${error.message}`));
+            reject(
+              new Error(`Failed to get user preferences: ${error.message}`),
+            );
             return;
           }
 
@@ -717,11 +829,13 @@ export class GrpcAPIClient {
             autoObservations: response.auto_observations,
             contextInjection: response.context_injection,
             contextInjectionLimit: response.context_injection_limit || 50,
-            contextInjectionMaxTokens: response.context_injection_max_tokens || 2500,
-            contextInjectionFullDetailsCount: response.context_injection_full_details_count || 5,
+            contextInjectionMaxTokens:
+              response.context_injection_max_tokens || 2500,
+            contextInjectionFullDetailsCount:
+              response.context_injection_full_details_count || 5,
             autoSaveSession: response.auto_save_session ?? true, // Default to enabled
           });
-        }
+        },
       );
     });
   }
@@ -734,7 +848,7 @@ export class GrpcAPIClient {
     interactionIndex: number,
     base64Data: string,
     mediaType: string,
-    filename?: string
+    filename?: string,
   ): Promise<{
     success: boolean;
     storagePath?: string;
@@ -770,7 +884,7 @@ export class GrpcAPIClient {
             storagePath: response.storage_path,
             publicUrl: response.public_url,
           });
-        }
+        },
       );
     });
   }
@@ -782,14 +896,14 @@ export class GrpcAPIClient {
   async uploadPlanFile(
     sessionId: string,
     slug: string,
-    content: string
+    content: string,
   ): Promise<{
     success: boolean;
     error?: string;
   }> {
     return new Promise((resolve, reject) => {
       // Convert string content to bytes (Buffer)
-      const fileData = Buffer.from(content, 'utf-8');
+      const fileData = Buffer.from(content, "utf-8");
 
       this.client.uploadPlanFile(
         {
@@ -813,7 +927,7 @@ export class GrpcAPIClient {
           }
 
           resolve({ success: true });
-        }
+        },
       );
     });
   }
@@ -821,7 +935,10 @@ export class GrpcAPIClient {
   /**
    * Get project observations for context injection
    */
-  async getProjectObservations(projectId: string, limit?: number): Promise<{
+  async getProjectObservations(
+    projectId: string,
+    limit?: number,
+  ): Promise<{
     observations: Array<{
       id: string;
       sessionId: string;
@@ -853,30 +970,34 @@ export class GrpcAPIClient {
               resolve(null);
               return;
             }
-            reject(new Error(`Failed to get project observations: ${error.message}`));
+            reject(
+              new Error(`Failed to get project observations: ${error.message}`),
+            );
             return;
           }
 
-          const observations = (response.observations || []).map((obs: any) => ({
-            id: obs.id,
-            sessionId: obs.session_id,
-            projectId: obs.project_id,
-            type: obs.type,
-            title: obs.title,
-            subtitle: obs.subtitle,
-            narrative: obs.narrative,
-            facts: obs.facts || [],
-            concepts: obs.concepts || [],
-            files: obs.files || [],
-            toolName: obs.tool_name,
-            createdAt: obs.created_at,
-          }));
+          const observations = (response.observations || []).map(
+            (obs: any) => ({
+              id: obs.id,
+              sessionId: obs.session_id,
+              projectId: obs.project_id,
+              type: obs.type,
+              title: obs.title,
+              subtitle: obs.subtitle,
+              narrative: obs.narrative,
+              facts: obs.facts || [],
+              concepts: obs.concepts || [],
+              files: obs.files || [],
+              toolName: obs.tool_name,
+              createdAt: obs.created_at,
+            }),
+          );
 
           resolve({
             observations,
             totalCount: response.total_count || observations.length,
           });
-        }
+        },
       );
     });
   }
@@ -901,7 +1022,9 @@ export class GrpcAPIClient {
               resolve(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, 'Get user public key')));
+            reject(
+              new Error(this.getErrorMessage(error, "Get user public key")),
+            );
             return;
           }
 
@@ -909,7 +1032,7 @@ export class GrpcAPIClient {
             publicKey: response.public_key,
             keyVersion: response.key_version || 1,
           });
-        }
+        },
       );
     });
   }
@@ -922,7 +1045,9 @@ export class GrpcAPIClient {
     return Date.now() - this.teamKeyCache.fetchedAt < this.teamKeyCacheTtlMs;
   }
 
-  async listUserTeams(): Promise<Array<{ id: string; name?: string; slug?: string }>> {
+  async listUserTeams(): Promise<
+    Array<{ id: string; name?: string; slug?: string }>
+  > {
     return new Promise((resolve, reject) => {
       this.client.listUserTeams(
         {},
@@ -934,7 +1059,7 @@ export class GrpcAPIClient {
               resolve([]);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, 'List user teams')));
+            reject(new Error(this.getErrorMessage(error, "List user teams")));
             return;
           }
 
@@ -945,7 +1070,7 @@ export class GrpcAPIClient {
           }));
 
           resolve(teams);
-        }
+        },
       );
     });
   }
@@ -965,7 +1090,9 @@ export class GrpcAPIClient {
               resolve(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, 'Get team public key')));
+            reject(
+              new Error(this.getErrorMessage(error, "Get team public key")),
+            );
             return;
           }
 
@@ -973,7 +1100,7 @@ export class GrpcAPIClient {
             publicKey: response.public_key,
             keyVersion: response.key_version || 1,
           });
-        }
+        },
       );
     });
   }
@@ -994,7 +1121,9 @@ export class GrpcAPIClient {
       }
 
       if (teams.length > 1) {
-        logger.warn(`Multiple teams detected (${teams.length}). Using the first team for encryption.`);
+        logger.warn(
+          `Multiple teams detected (${teams.length}). Using the first team for encryption.`,
+        );
       }
 
       const teamId = teams[0].id;
@@ -1012,7 +1141,7 @@ export class GrpcAPIClient {
 
       return this.teamKeyCache;
     } catch (error) {
-      logger.warn('Failed to resolve team encryption key:', error);
+      logger.warn("Failed to resolve team encryption key:", error);
       return null;
     }
   }
@@ -1021,19 +1150,26 @@ export class GrpcAPIClient {
    * Get approved team skills for syncing to plugin as SKILL.md files.
    * Only returns approved, team-visible, non-sensitive skills.
    */
-  async getTeamSkills(teamId: string, projectId?: string, scope?: string): Promise<Array<{
-    id: string;
-    slug: string;
-    title: string;
-    summary?: string;
-    content: string;
-    category: string;
-    tags: string[];
-    scope: string;
-    version: number;
-    lastPublishedAt?: string;
-    projectId?: string;
-  }>> {
+  async getTeamSkills(
+    teamId: string,
+    projectId?: string,
+    scope?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      slug: string;
+      title: string;
+      summary?: string;
+      content: string;
+      category: string;
+      tags: string[];
+      scope: string;
+      version: number;
+      lastPublishedAt?: string;
+      projectId?: string;
+      files?: Record<string, string>;
+    }>
+  > {
     return new Promise((resolve, reject) => {
       const request: any = { team_id: teamId };
       if (projectId) request.project_id = projectId;
@@ -1049,7 +1185,7 @@ export class GrpcAPIClient {
               resolve([]);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, 'Get team skills')));
+            reject(new Error(this.getErrorMessage(error, "Get team skills")));
             return;
           }
 
@@ -1065,10 +1201,12 @@ export class GrpcAPIClient {
             version: s.version || 1,
             lastPublishedAt: s.last_published_at || undefined,
             projectId: s.project_id || undefined,
+            files:
+              s.files && Object.keys(s.files).length > 0 ? s.files : undefined,
           }));
 
           resolve(skills);
-        }
+        },
       );
     });
   }
@@ -1086,6 +1224,7 @@ export class GrpcAPIClient {
     category?: string;
     tags?: string[];
     scope?: string;
+    files?: Record<string, string>;
   }): Promise<{ skillId: string; slug: string }> {
     return new Promise((resolve, reject) => {
       const request: any = {
@@ -1098,6 +1237,8 @@ export class GrpcAPIClient {
       if (input.category) request.category = input.category;
       if (input.tags && input.tags.length > 0) request.tags = input.tags;
       if (input.scope) request.scope = input.scope;
+      if (input.files && Object.keys(input.files).length > 0)
+        request.files = input.files;
 
       this.client.createTeamSkill(
         request,
@@ -1105,7 +1246,7 @@ export class GrpcAPIClient {
         { deadline: this.getDeadline() },
         (error: grpc.ServiceError | null, response: any) => {
           if (error) {
-            reject(new Error(this.getErrorMessage(error, 'Create team skill')));
+            reject(new Error(this.getErrorMessage(error, "Create team skill")));
             return;
           }
 
@@ -1113,7 +1254,7 @@ export class GrpcAPIClient {
             skillId: response.skill_id,
             slug: response.slug,
           });
-        }
+        },
       );
     });
   }
@@ -1148,9 +1289,9 @@ export class GrpcAPIClient {
             currentCount: response.current_count || 0,
             limit: response.limit || 0,
             remaining: response.remaining || 0,
-            subscriptionTier: response.subscription_tier || 'free',
+            subscriptionTier: response.subscription_tier || "free",
           });
-        }
+        },
       );
     });
   }
@@ -1164,7 +1305,7 @@ export class GrpcAPIClient {
  * Parsed session limit error information
  */
 export interface SessionLimitError {
-  type: 'session_limit_exceeded';
+  type: "session_limit_exceeded";
   currentCount: number;
   limit: number;
   upgradeUrl: string;
@@ -1175,11 +1316,13 @@ export interface SessionLimitError {
  * Returns null if the error is not a session limit error
  */
 export function parseSessionLimitError(error: Error): SessionLimitError | null {
-  const message = error.message || '';
-  const match = message.match(/session_limit_exceeded:current=(\d+):limit=(\d+):upgrade_url=(.+)/);
+  const message = error.message || "";
+  const match = message.match(
+    /session_limit_exceeded:current=(\d+):limit=(\d+):upgrade_url=(.+)/,
+  );
   if (match) {
     return {
-      type: 'session_limit_exceeded',
+      type: "session_limit_exceeded",
       currentCount: parseInt(match[1], 10),
       limit: parseInt(match[2], 10),
       upgradeUrl: match[3],
@@ -1203,7 +1346,7 @@ export function isResourceExhaustedError(error: any): boolean {
  * Parsed onboarding error information
  */
 export interface OnboardingError {
-  type: 'onboarding_required';
+  type: "onboarding_required";
   message: string;
 }
 
@@ -1212,11 +1355,15 @@ export interface OnboardingError {
  * Returns null if the error is not an onboarding error
  */
 export function parseOnboardingError(error: Error): OnboardingError | null {
-  const message = error.message || '';
-  if (message.includes('no team found') || message.includes('complete onboarding')) {
+  const message = error.message || "";
+  if (
+    message.includes("no team found") ||
+    message.includes("complete onboarding")
+  ) {
     return {
-      type: 'onboarding_required',
-      message: 'Please complete onboarding at https://sessionhub.dev to create or join a team',
+      type: "onboarding_required",
+      message:
+        "Please complete onboarding at https://sessionhub.dev to create or join a team",
     };
   }
   return null;

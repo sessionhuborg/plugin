@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.1
+// SessionHub Plugin v1.0.4
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -31098,7 +31098,9 @@ var GrpcAPIClient = class {
       defaults: true,
       oneofs: true
     });
-    const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+    const protoDescriptor = grpc.loadPackageDefinition(
+      packageDefinition
+    );
     const sessionhub = protoDescriptor.sessionhub;
     const isLocalhostForTls = this.backendUrl.startsWith("localhost") || this.backendUrl.startsWith("127.0.0.1");
     const shouldUseTls = useTls ?? !isLocalhostForTls;
@@ -31107,7 +31109,9 @@ var GrpcAPIClient = class {
       this.backendUrl,
       credentials2
     );
-    logger.info(`gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`);
+    logger.info(
+      `gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`
+    );
   }
   getMetadata() {
     const metadata = new grpc.Metadata();
@@ -31173,7 +31177,9 @@ var GrpcAPIClient = class {
               resolve2(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "API key validation")));
+            reject(
+              new Error(this.getErrorMessage(error, "API key validation"))
+            );
             return;
           }
           resolve2({
@@ -31281,7 +31287,9 @@ var GrpcAPIClient = class {
           }
         }
       }
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter((snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0).map((snapshot) => ({
+      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter(
+        (snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0
+      ).map((snapshot) => ({
         timestamp: snapshot.timestamp,
         todos: snapshot.todos.map((todo) => ({
           content: todo.content,
@@ -31289,7 +31297,10 @@ var GrpcAPIClient = class {
           active_form: todo.activeForm
         }))
       })) : [];
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch
+      );
       const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0 ? JSON.stringify(sessionData.sub_sessions) : void 0;
       const request = {
         project_name: sessionData.project_name,
@@ -31330,15 +31341,22 @@ var GrpcAPIClient = class {
     let encryptionMode = "enhanced";
     try {
       const projects = await this.getProjects();
-      const project = projects.find((p) => p.name === sessionData.project_name);
+      const project = projects.find(
+        (p) => p.name === sessionData.project_name
+      );
       if (project) {
         encryptionMode = project.encryption_mode || "enhanced";
         logger.info(`Project encryption mode: ${encryptionMode}`);
       } else {
-        logger.info("Project not found, will use default encryption mode (enhanced)");
+        logger.info(
+          "Project not found, will use default encryption mode (enhanced)"
+        );
       }
     } catch (error) {
-      logger.warn("Failed to fetch projects for encryption mode check, using enhanced:", error);
+      logger.warn(
+        "Failed to fetch projects for encryption mode check, using enhanced:",
+        error
+      );
     }
     const shouldEncrypt = encryptionMode === "hybrid_e2e" || encryptionMode === "full_e2e";
     let publicKey = null;
@@ -31350,32 +31368,48 @@ var GrpcAPIClient = class {
         if (teamKeyData?.publicKey && await isValidPublicKey(teamKeyData.publicKey)) {
           publicKey = teamKeyData.publicKey;
           keyVersion = teamKeyData.keyVersion;
-          logger.info(`Using team encryption key for E2E mode: ${encryptionMode}`);
+          logger.info(
+            `Using team encryption key for E2E mode: ${encryptionMode}`
+          );
         } else {
           const keyData = await this.getUserPublicKey();
           if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
             publicKey = keyData.publicKey;
             keyVersion = keyData.keyVersion;
-            logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
+            logger.warn(
+              `Falling back to personal encryption key for E2E mode: ${encryptionMode}`
+            );
           }
         }
         if (!publicKey) {
-          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
+          throw new Error(
+            `E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`
+          );
         }
-        encryptedFields = await encryptSessionFields({
-          interactions: sessionData.interactions,
-          todoSnapshots: sessionData.todo_snapshots,
-          subSessions: sessionData.sub_sessions,
-          attachmentUrls: sessionData.attachment_urls
-        }, publicKey);
+        encryptedFields = await encryptSessionFields(
+          {
+            interactions: sessionData.interactions,
+            todoSnapshots: sessionData.todo_snapshots,
+            subSessions: sessionData.sub_sessions,
+            attachmentUrls: sessionData.attachment_urls
+          },
+          publicKey
+        );
         logger.info("Session data encrypted successfully");
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
-        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
+        logger.error(
+          `Failed to encrypt session data for ${encryptionMode} mode:`,
+          error
+        );
+        throw new Error(
+          `Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`
+        );
       }
     } else {
-      logger.info("Enhanced mode: sending plaintext (server handles encryption at rest)");
+      logger.info(
+        "Enhanced mode: sending plaintext (server handles encryption at rest)"
+      );
     }
     return new Promise((resolve2, reject) => {
       const serializedMetadata = {};
@@ -31392,7 +31426,9 @@ var GrpcAPIClient = class {
           }
         }
       }
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter((snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0).map((snapshot) => ({
+      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter(
+        (snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0
+      ).map((snapshot) => ({
         timestamp: snapshot.timestamp,
         todos: snapshot.todos.map((todo) => ({
           content: todo.content,
@@ -31400,7 +31436,10 @@ var GrpcAPIClient = class {
           active_form: todo.activeForm
         }))
       })) : [];
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch
+      );
       const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0 ? JSON.stringify(sessionData.sub_sessions) : void 0;
       const isEncrypted = encryptedFields !== null;
       const request = {
@@ -31438,31 +31477,33 @@ var GrpcAPIClient = class {
         request.todo_snapshots = transformedTodoSnapshots;
         request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [];
         request.sub_sessions_json = subSessionsJson;
-        request.interactions = (sessionData.interactions || []).map((int) => {
-          const serializedInteractionMetadata = {};
-          if (int.metadata) {
-            for (const [key, value] of Object.entries(int.metadata)) {
-              if (typeof value === "string") {
-                serializedInteractionMetadata[key] = value;
-              } else if (typeof value === "number" || typeof value === "boolean") {
-                serializedInteractionMetadata[key] = String(value);
-              } else if (value === null || value === void 0) {
-                serializedInteractionMetadata[key] = String(value);
-              } else {
-                serializedInteractionMetadata[key] = JSON.stringify(value);
+        request.interactions = (sessionData.interactions || []).map(
+          (int) => {
+            const serializedInteractionMetadata = {};
+            if (int.metadata) {
+              for (const [key, value] of Object.entries(int.metadata)) {
+                if (typeof value === "string") {
+                  serializedInteractionMetadata[key] = value;
+                } else if (typeof value === "number" || typeof value === "boolean") {
+                  serializedInteractionMetadata[key] = String(value);
+                } else if (value === null || value === void 0) {
+                  serializedInteractionMetadata[key] = String(value);
+                } else {
+                  serializedInteractionMetadata[key] = JSON.stringify(value);
+                }
               }
             }
+            return {
+              timestamp: int.timestamp,
+              interaction_type: int.interaction_type,
+              content: int.content,
+              tool_name: int.tool_name,
+              metadata: serializedInteractionMetadata,
+              input_tokens: int.input_tokens || 0,
+              output_tokens: int.output_tokens || 0
+            };
           }
-          return {
-            timestamp: int.timestamp,
-            interaction_type: int.interaction_type,
-            content: int.content,
-            tool_name: int.tool_name,
-            metadata: serializedInteractionMetadata,
-            input_tokens: int.input_tokens || 0,
-            output_tokens: int.output_tokens || 0
-          };
-        });
+        );
       }
       this.client.upsertSession(
         request,
@@ -31476,12 +31517,16 @@ var GrpcAPIClient = class {
           }
           const action = response.was_updated ? "updated" : "created";
           const encryptionNote = isEncrypted ? " (encrypted)" : "";
-          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`);
+          logger.info(
+            `Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`
+          );
           if (response.analysis_triggered) {
             logger.info("Analysis triggered based on user preferences");
           }
           if (response.observations_triggered) {
-            logger.info("Observations extraction triggered based on user preferences");
+            logger.info(
+              "Observations extraction triggered based on user preferences"
+            );
           }
           resolve2({
             sessionId: response.session_id,
@@ -31519,53 +31564,59 @@ var GrpcAPIClient = class {
     let totalFailed = 0;
     for (let i = 0; i < interactions.length; i += chunkSize) {
       const chunk = interactions.slice(i, i + chunkSize);
-      const result = await new Promise((resolve2, reject) => {
-        this.client.addInteractionsBatch(
-          {
-            session_id: sessionId,
-            interactions: chunk.map((int) => {
-              const serializedMetadata = {};
-              if (int.metadata) {
-                for (const [key, value] of Object.entries(int.metadata)) {
-                  if (typeof value === "string") {
-                    serializedMetadata[key] = value;
-                  } else if (typeof value === "number" || typeof value === "boolean") {
-                    serializedMetadata[key] = String(value);
-                  } else if (value === null || value === void 0) {
-                    serializedMetadata[key] = String(value);
-                  } else {
-                    serializedMetadata[key] = JSON.stringify(value);
+      const result = await new Promise(
+        (resolve2, reject) => {
+          this.client.addInteractionsBatch(
+            {
+              session_id: sessionId,
+              interactions: chunk.map((int) => {
+                const serializedMetadata = {};
+                if (int.metadata) {
+                  for (const [key, value] of Object.entries(int.metadata)) {
+                    if (typeof value === "string") {
+                      serializedMetadata[key] = value;
+                    } else if (typeof value === "number" || typeof value === "boolean") {
+                      serializedMetadata[key] = String(value);
+                    } else if (value === null || value === void 0) {
+                      serializedMetadata[key] = String(value);
+                    } else {
+                      serializedMetadata[key] = JSON.stringify(value);
+                    }
                   }
                 }
+                return {
+                  timestamp: int.timestamp,
+                  interaction_type: int.interaction_type,
+                  content: int.content,
+                  tool_name: int.tool_name,
+                  metadata: serializedMetadata,
+                  input_tokens: int.input_tokens || 0,
+                  output_tokens: int.output_tokens || 0
+                };
+              })
+            },
+            this.getMetadata(),
+            { deadline: this.getDeadline(60) },
+            // Longer timeout for batch operations
+            (error, response) => {
+              if (error) {
+                logger.error(
+                  `Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`
+                );
+                resolve2({ processed: 0, failed: chunk.length });
+                return;
               }
-              return {
-                timestamp: int.timestamp,
-                interaction_type: int.interaction_type,
-                content: int.content,
-                tool_name: int.tool_name,
-                metadata: serializedMetadata,
-                input_tokens: int.input_tokens || 0,
-                output_tokens: int.output_tokens || 0
-              };
-            })
-          },
-          this.getMetadata(),
-          { deadline: this.getDeadline(60) },
-          // Longer timeout for batch operations
-          (error, response) => {
-            if (error) {
-              logger.error(`Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`);
-              resolve2({ processed: 0, failed: chunk.length });
-              return;
+              logger.info(
+                `Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`
+              );
+              resolve2({
+                processed: response.processed,
+                failed: response.failed
+              });
             }
-            logger.info(`Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`);
-            resolve2({
-              processed: response.processed,
-              failed: response.failed
-            });
-          }
-        );
-      });
+          );
+        }
+      );
       totalProcessed += result.processed;
       totalFailed += result.failed;
     }
@@ -31642,7 +31693,9 @@ var GrpcAPIClient = class {
               resolve2(null);
               return;
             }
-            reject(new Error(`Failed to get user preferences: ${error.message}`));
+            reject(
+              new Error(`Failed to get user preferences: ${error.message}`)
+            );
             return;
           }
           resolve2({
@@ -31741,23 +31794,27 @@ var GrpcAPIClient = class {
               resolve2(null);
               return;
             }
-            reject(new Error(`Failed to get project observations: ${error.message}`));
+            reject(
+              new Error(`Failed to get project observations: ${error.message}`)
+            );
             return;
           }
-          const observations = (response.observations || []).map((obs) => ({
-            id: obs.id,
-            sessionId: obs.session_id,
-            projectId: obs.project_id,
-            type: obs.type,
-            title: obs.title,
-            subtitle: obs.subtitle,
-            narrative: obs.narrative,
-            facts: obs.facts || [],
-            concepts: obs.concepts || [],
-            files: obs.files || [],
-            toolName: obs.tool_name,
-            createdAt: obs.created_at
-          }));
+          const observations = (response.observations || []).map(
+            (obs) => ({
+              id: obs.id,
+              sessionId: obs.session_id,
+              projectId: obs.project_id,
+              type: obs.type,
+              title: obs.title,
+              subtitle: obs.subtitle,
+              narrative: obs.narrative,
+              facts: obs.facts || [],
+              concepts: obs.concepts || [],
+              files: obs.files || [],
+              toolName: obs.tool_name,
+              createdAt: obs.created_at
+            })
+          );
           resolve2({
             observations,
             totalCount: response.total_count || observations.length
@@ -31782,7 +31839,9 @@ var GrpcAPIClient = class {
               resolve2(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "Get user public key")));
+            reject(
+              new Error(this.getErrorMessage(error, "Get user public key"))
+            );
             return;
           }
           resolve2({
@@ -31836,7 +31895,9 @@ var GrpcAPIClient = class {
               resolve2(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "Get team public key")));
+            reject(
+              new Error(this.getErrorMessage(error, "Get team public key"))
+            );
             return;
           }
           resolve2({
@@ -31857,7 +31918,9 @@ var GrpcAPIClient = class {
         return null;
       }
       if (teams.length > 1) {
-        logger.warn(`Multiple teams detected (${teams.length}). Using the first team for encryption.`);
+        logger.warn(
+          `Multiple teams detected (${teams.length}). Using the first team for encryption.`
+        );
       }
       const teamId = teams[0].id;
       const keyData = await this.getTeamPublicKey(teamId);
@@ -31909,7 +31972,8 @@ var GrpcAPIClient = class {
             scope: s.scope,
             version: s.version || 1,
             lastPublishedAt: s.last_published_at || void 0,
-            projectId: s.project_id || void 0
+            projectId: s.project_id || void 0,
+            files: s.files && Object.keys(s.files).length > 0 ? s.files : void 0
           }));
           resolve2(skills);
         }
@@ -31932,6 +31996,8 @@ var GrpcAPIClient = class {
       if (input.category) request.category = input.category;
       if (input.tags && input.tags.length > 0) request.tags = input.tags;
       if (input.scope) request.scope = input.scope;
+      if (input.files && Object.keys(input.files).length > 0)
+        request.files = input.files;
       this.client.createTeamSkill(
         request,
         this.getMetadata(),
@@ -31981,7 +32047,9 @@ var GrpcAPIClient = class {
 };
 function parseSessionLimitError(error) {
   const message = error.message || "";
-  const match = message.match(/session_limit_exceeded:current=(\d+):limit=(\d+):upgrade_url=(.+)/);
+  const match = message.match(
+    /session_limit_exceeded:current=(\d+):limit=(\d+):upgrade_url=(.+)/
+  );
   if (match) {
     return {
       type: "session_limit_exceeded",
@@ -33177,13 +33245,17 @@ var __dirname3 = (0, import_path4.dirname)(__filename2);
 var CONFIG_DIR = (0, import_path4.join)((0, import_os3.homedir)(), ".sessionhub");
 var CONFIG_FILE = (0, import_path4.join)(CONFIG_DIR, "config.json");
 function showSetupInstructions() {
-  console.error("\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+  console.error(
+    "\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+  );
   console.error("  SessionHub is not configured yet!");
   console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
   console.error("\n  To get started, run:\n");
   console.error("    /setup <your-api-key>\n");
   console.error("  Get your API key at: https://sessionhub.dev/settings");
-  console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
+  console.error(
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+  );
 }
 async function initializeClient(apiKey) {
   const configManager = new ConfigManager();
@@ -33193,17 +33265,29 @@ async function initializeClient(apiKey) {
     showSetupInstructions();
     return null;
   }
-  const client = new GrpcAPIClient(finalApiKey, config.backendGrpcUrl, config.grpcUseTls);
+  const client = new GrpcAPIClient(
+    finalApiKey,
+    config.backendGrpcUrl,
+    config.grpcUseTls
+  );
   const user = await client.validateApiKey();
   if (!user) {
-    console.error("\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+    console.error(
+      "\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    );
     console.error("  Authentication Failed");
-    console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
-    console.error("\n  Your API key appears to be invalid or the server is unreachable.");
+    console.error(
+      "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+    );
+    console.error(
+      "\n  Your API key appears to be invalid or the server is unreachable."
+    );
     console.error("\n  To reconfigure, run:\n");
     console.error("    /setup <your-api-key>\n");
     console.error("  Get a new API key at: https://sessionhub.dev/settings");
-    console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
+    console.error(
+      "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+    );
     return null;
   }
   logger.info(`Authenticated as: ${user.email}`);
@@ -33240,7 +33324,9 @@ program.command("setup").description("Configure SessionHub with your API key").o
   try {
     const apiKey = opts.apiKey;
     if (!apiKey) {
-      console.error("Error: API key is required. Usage: setup --api-key <your-api-key>");
+      console.error(
+        "Error: API key is required. Usage: setup --api-key <your-api-key>"
+      );
       process.exit(1);
     }
     if (!(0, import_fs3.existsSync)(CONFIG_DIR)) {
@@ -33257,20 +33343,34 @@ program.command("setup").description("Configure SessionHub with your API key").o
     config.user.apiKey = apiKey;
     const configManager = new ConfigManager();
     const fullConfig = configManager.getConfig();
-    const client = new GrpcAPIClient(apiKey, fullConfig.backendGrpcUrl, fullConfig.grpcUseTls);
+    const client = new GrpcAPIClient(
+      apiKey,
+      fullConfig.backendGrpcUrl,
+      fullConfig.grpcUseTls
+    );
     const user = await client.validateApiKey();
     if (!user) {
-      console.error("\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+      console.error(
+        "\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+      );
       console.error("  Invalid API Key");
-      console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+      console.error(
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+      );
       console.error("\n  The API key could not be validated.");
       console.error("  Please check your key and try again.");
-      console.error("\n  Get your API key at: https://sessionhub.dev/settings");
-      console.error("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n");
+      console.error(
+        "\n  Get your API key at: https://sessionhub.dev/settings"
+      );
+      console.error(
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+      );
       process.exit(1);
     }
     config.backendGrpcUrl = "plugin.sessionhub.dev";
-    (0, import_fs3.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 384 });
+    (0, import_fs3.writeFileSync)(CONFIG_FILE, JSON.stringify(config, null, 2), {
+      mode: 384
+    });
     const output = {
       success: true,
       message: "SessionHub configured successfully!",
@@ -33279,11 +33379,21 @@ program.command("setup").description("Configure SessionHub with your API key").o
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 });
-program.command("capture").description("Capture a Claude Code session").option("-p, --project <name>", "Project name (auto-detected if omitted)").option("-s, --session <name>", "Session name (auto-generated if omitted)").option("-t, --transcript <path>", "Transcript file path (latest if omitted)").option("-n, --last <n>", "Only capture last N user-assistant exchanges", parseInt).option("--api-key <key>", "API key (uses API_KEY env var if omitted)").option("--project-path <path>", "Project path (uses cwd if omitted)").option("--session-id <id>", "Session ID to capture (finds exact transcript instead of latest)").action(async (opts) => {
+program.command("capture").description("Capture a Claude Code session").option("-p, --project <name>", "Project name (auto-detected if omitted)").option("-s, --session <name>", "Session name (auto-generated if omitted)").option("-t, --transcript <path>", "Transcript file path (latest if omitted)").option(
+  "-n, --last <n>",
+  "Only capture last N user-assistant exchanges",
+  parseInt
+).option("--api-key <key>", "API key (uses API_KEY env var if omitted)").option("--project-path <path>", "Project path (uses cwd if omitted)").option(
+  "--session-id <id>",
+  "Session ID to capture (finds exact transcript instead of latest)"
+).action(async (opts) => {
   try {
     const auth = await initializeClient(opts.apiKey);
     if (!auth) {
@@ -33305,15 +33415,23 @@ program.command("capture").description("Capture a Claude Code session").option("
     if (opts.transcript) {
       targetFile = opts.transcript;
     } else {
-      const foundFile = await parser.findLatestTranscriptFile(projectPath, opts.sessionId);
+      const foundFile = await parser.findLatestTranscriptFile(
+        projectPath,
+        opts.sessionId
+      );
       if (!foundFile) {
-        console.error("Error: No transcript files found. Make sure you are in a project directory with Claude Code sessions.");
+        console.error(
+          "Error: No transcript files found. Make sure you are in a project directory with Claude Code sessions."
+        );
         process.exit(1);
       }
       targetFile = foundFile;
     }
     logger.info(`Processing transcript: ${targetFile}`);
-    const sessionData = await parser.parseTranscriptFile(targetFile, opts.last);
+    const sessionData = await parser.parseTranscriptFile(
+      targetFile,
+      opts.last
+    );
     if (!sessionData) {
       console.error("Error: Failed to parse transcript file");
       process.exit(1);
@@ -33324,8 +33442,17 @@ program.command("capture").description("Capture a Claude Code session").option("
       const path = await import("path");
       const sessionCwd = sessionData.cwd || projectPath;
       const projectDirName = sessionCwd.replace(/[\\/]/g, "-").replace(/_/g, "-");
-      const claudeProjectDir = path.join((0, import_os3.homedir)(), ".claude", "projects", projectDirName);
-      const subagentsDir = path.join(claudeProjectDir, sessionData.sessionId, "subagents");
+      const claudeProjectDir = path.join(
+        (0, import_os3.homedir)(),
+        ".claude",
+        "projects",
+        projectDirName
+      );
+      const subagentsDir = path.join(
+        claudeProjectDir,
+        sessionData.sessionId,
+        "subagents"
+      );
       const estimateInteractionIndex = (startTime) => {
         if (!startTime || !sessionData.interactions || sessionData.interactions.length === 0) {
           return 0;
@@ -33350,8 +33477,12 @@ program.command("capture").description("Capture a Claude Code session").option("
       };
       try {
         const files = await fs.readdir(subagentsDir);
-        const agentFiles = files.filter((file) => file.startsWith("agent-") && file.endsWith(".jsonl"));
-        logger.info(`Checking for sub-agent files in ${subagentsDir} (${agentFiles.length} found)`);
+        const agentFiles = files.filter(
+          (file) => file.startsWith("agent-") && file.endsWith(".jsonl")
+        );
+        logger.info(
+          `Checking for sub-agent files in ${subagentsDir} (${agentFiles.length} found)`
+        );
         for (const file of agentFiles) {
           const agentId = file.replace(/^agent-/, "").replace(/\.jsonl$/, "");
           const agentFilePath = path.join(subagentsDir, file);
@@ -33363,7 +33494,9 @@ program.command("capture").description("Capture a Claude Code session").option("
             0
           );
           if (subSession) {
-            subSession.interactionIndex = estimateInteractionIndex(subSession.startTime);
+            subSession.interactionIndex = estimateInteractionIndex(
+              subSession.startTime
+            );
             subSessions.push(subSession);
           }
         }
@@ -33371,7 +33504,9 @@ program.command("capture").description("Capture a Claude Code session").option("
         logger.info(`No sub-agent directory found at ${subagentsDir}`);
       }
       if (subSessions.length > 0) {
-        logger.info(`Discovered ${subSessions.length} sub-agent conversations`);
+        logger.info(
+          `Discovered ${subSessions.length} sub-agent conversations`
+        );
       }
     }
     const project = await ensureProject(client, projectName, projectPath);
@@ -33454,10 +33589,17 @@ program.command("capture").description("Capture a Claude Code session").option("
     if (sessionData.planFileSlug && !planFileContent) {
       try {
         const fs = await import("fs/promises");
-        const planPath = (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "plans", `${sessionData.planFileSlug}.md`);
+        const planPath = (0, import_path4.join)(
+          (0, import_os3.homedir)(),
+          ".claude",
+          "plans",
+          `${sessionData.planFileSlug}.md`
+        );
         planFileContent = await fs.readFile(planPath, "utf-8");
       } catch (readError) {
-        logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+        logger.warn(
+          `Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`
+        );
       }
     }
     if (sessionData.planFileSlug && planFileContent) {
@@ -33474,18 +33616,27 @@ program.command("capture").description("Capture a Claude Code session").option("
           logger.warn(`Plan file upload failed: ${planResult.error}`);
         }
       } catch (uploadError) {
-        logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+        logger.warn(
+          `Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`
+        );
       }
     }
     const lastSessionFile = (0, import_path4.join)(CONFIG_DIR, "last-session.json");
     const tempFile = `${lastSessionFile}.${process.pid}.tmp`;
     try {
-      (0, import_fs3.writeFileSync)(tempFile, JSON.stringify({
-        sessionId: result.sessionId,
-        projectPath,
-        projectName,
-        capturedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }, null, 2));
+      (0, import_fs3.writeFileSync)(
+        tempFile,
+        JSON.stringify(
+          {
+            sessionId: result.sessionId,
+            projectPath,
+            projectName,
+            capturedAt: (/* @__PURE__ */ new Date()).toISOString()
+          },
+          null,
+          2
+        )
+      );
       (0, import_fs3.renameSync)(tempFile, lastSessionFile);
     } catch (writeError) {
       try {
@@ -33514,7 +33665,10 @@ program.command("capture").description("Capture a Claude Code session").option("
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 });
@@ -33564,7 +33718,9 @@ program.command("import-all").description("Import all Claude Code sessions from 
           sessionsToImport = quota.remaining;
           skippedCount = transcriptFiles.length - sessionsToImport;
           wasLimited = true;
-          logger.warn(`Session limit: Only importing ${sessionsToImport} of ${transcriptFiles.length} sessions (${quota.currentCount}/${quota.limit} used)`);
+          logger.warn(
+            `Session limit: Only importing ${sessionsToImport} of ${transcriptFiles.length} sessions (${quota.currentCount}/${quota.limit} used)`
+          );
         }
       }
     } catch (quotaError) {
@@ -33586,7 +33742,11 @@ program.command("import-all").description("Import all Claude Code sessions from 
         const sessionData = await parser.parseTranscriptFile(filePath);
         if (!sessionData) {
           errorCount++;
-          results.push({ file: fileName, success: false, error: "Failed to parse" });
+          results.push({
+            file: fileName,
+            success: false,
+            error: "Failed to parse"
+          });
           continue;
         }
         const sessionName = `Imported Session - ${new Date(sessionData.startTime).toLocaleString()}`;
@@ -33617,10 +33777,17 @@ program.command("import-all").description("Import all Claude Code sessions from 
           if (sessionData.planFileSlug && !planFileContent) {
             try {
               const fs = await import("fs/promises");
-              const planPath = (0, import_path4.join)((0, import_os3.homedir)(), ".claude", "plans", `${sessionData.planFileSlug}.md`);
+              const planPath = (0, import_path4.join)(
+                (0, import_os3.homedir)(),
+                ".claude",
+                "plans",
+                `${sessionData.planFileSlug}.md`
+              );
               planFileContent = await fs.readFile(planPath, "utf-8");
             } catch (readError) {
-              logger.warn(`Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`);
+              logger.warn(
+                `Plan file read failed: ${readError instanceof Error ? readError.message : String(readError)}`
+              );
             }
           }
           if (sessionData.planFileSlug && planFileContent) {
@@ -33631,23 +33798,39 @@ program.command("import-all").description("Import all Claude Code sessions from 
                 planFileContent
               );
               if (planResult.success) {
-                logger.info(`Plan file uploaded: ${sessionData.planFileSlug}.md`);
+                logger.info(
+                  `Plan file uploaded: ${sessionData.planFileSlug}.md`
+                );
               } else {
                 logger.warn(`Plan file upload failed: ${planResult.error}`);
               }
             } catch (uploadError) {
-              logger.warn(`Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`);
+              logger.warn(
+                `Plan file upload error: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`
+              );
             }
           }
           successCount++;
-          results.push({ file: fileName, success: true, sessionId: result.sessionId });
+          results.push({
+            file: fileName,
+            success: true,
+            sessionId: result.sessionId
+          });
         } else {
           errorCount++;
-          results.push({ file: fileName, success: false, error: "Failed to create session" });
+          results.push({
+            file: fileName,
+            success: false,
+            error: "Failed to create session"
+          });
         }
       } catch (error) {
         errorCount++;
-        results.push({ file: fileName, success: false, error: error instanceof Error ? error.message : "Unknown error" });
+        results.push({
+          file: fileName,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     }
     const output = {
@@ -33666,7 +33849,10 @@ program.command("import-all").description("Import all Claude Code sessions from 
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 });
@@ -33690,21 +33876,14 @@ program.command("sync-skills").description("Sync approved team skills as SKILL.m
       teamId = teams[0].id;
       teamSlug = teams[0].slug;
     }
-    const skills = await client.getTeamSkills(teamId, opts.project, opts.scope);
-    if (skills.length === 0) {
-      const output2 = {
-        success: true,
-        message: "No approved team skills found to sync.",
-        teamId,
-        skillsSynced: 0,
-        skillsRemoved: 0
-      };
-      console.log(JSON.stringify(output2, null, 2));
-      return;
-    }
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || (0, import_path4.join)(__dirname3, "..");
-    const skillsDir = path.join(pluginRoot, "skills");
+    const skills = await client.getTeamSkills(
+      teamId,
+      opts.project,
+      opts.scope
+    );
+    const skillsDir = path.join((0, import_os3.homedir)(), ".claude", "skills");
     await fs.mkdir(skillsDir, { recursive: true });
+    const resolvedSkillsDir = path.resolve(skillsDir);
     const cacheFile = (0, import_path4.join)(CONFIG_DIR, "skills-cache.json");
     let cache = {};
     try {
@@ -33716,9 +33895,9 @@ program.command("sync-skills").description("Sync approved team skills as SKILL.m
     let newCount = 0;
     let updatedCount = 0;
     let unchangedCount = 0;
-    const resolvedSkillsDir = path.resolve(skillsDir);
+    const teamPrefix = teamSlug || teamId.slice(0, 8);
     for (const skill of skills) {
-      const effectiveSlug = skill.scope === "project" && skill.projectId ? `${teamSlug || teamId.slice(0, 8)}-${skill.slug}` : skill.slug;
+      const effectiveSlug = `${teamPrefix}-${skill.slug}`;
       const skillDir = path.join(skillsDir, effectiveSlug);
       const resolvedDir = path.resolve(skillDir);
       if (!resolvedDir.startsWith(resolvedSkillsDir + path.sep)) {
@@ -33739,9 +33918,34 @@ program.command("sync-skills").description("Sync approved team skills as SKILL.m
         "---",
         ""
       ].join("\n");
-      const skillContent = frontmatter + skill.content;
       await fs.mkdir(skillDir, { recursive: true });
-      await fs.writeFile(path.join(skillDir, "SKILL.md"), skillContent, "utf-8");
+      const hasMultipleFiles = skill.files && Object.keys(skill.files).length > 1;
+      if (hasMultipleFiles) {
+        for (const [filePath, fileContent] of Object.entries(skill.files)) {
+          if (filePath.includes("..") || filePath.startsWith("/")) {
+            logger.warn(`Skipping file with unsafe path: ${filePath}`);
+            continue;
+          }
+          const fullPath = path.join(skillDir, filePath);
+          const resolvedFilePath = path.resolve(fullPath);
+          if (!resolvedFilePath.startsWith(resolvedDir + path.sep)) {
+            logger.warn(`Skipping file with traversal path: ${filePath}`);
+            continue;
+          }
+          const fileDir = path.dirname(fullPath);
+          await fs.mkdir(fileDir, { recursive: true });
+          const isEntry = filePath === "SKILL.md" || filePath === "index.md" || filePath === "README.md";
+          const content = isEntry ? frontmatter + fileContent : fileContent;
+          await fs.writeFile(fullPath, content, "utf-8");
+        }
+      } else {
+        const skillContent = frontmatter + skill.content;
+        await fs.writeFile(
+          path.join(skillDir, "SKILL.md"),
+          skillContent,
+          "utf-8"
+        );
+      }
       cache[effectiveSlug] = { version: skill.version, slug: skill.slug };
       if (cached) {
         updatedCount++;
@@ -33779,50 +33983,125 @@ program.command("sync-skills").description("Sync approved team skills as SKILL.m
       unchanged: unchangedCount,
       removed: removedCount,
       skillsDir,
-      message: `Synced ${skills.length} skills (${newCount} new, ${updatedCount} updated, ${removedCount} removed)`
+      message: skills.length === 0 ? `No approved team skills found; removed ${removedCount} previously synced skills` : `Synced ${skills.length} skills (${newCount} new, ${updatedCount} updated, ${removedCount} removed)`
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 });
-program.command("push-skill").description("Push a local skill file to the team as a draft").option("--team <id>", "Team ID (uses primary team if omitted)").option("--file <path>", "Path to skill file (.md)").option("--title <title>", "Skill title (extracted from frontmatter or filename)").option("--category <cat>", "Category: prompt, checklist, code_pattern, runbook, playbook, other").option("--tags <tags>", "Comma-separated tags").option("--summary <summary>", "Short summary of the skill").action(async (opts) => {
+program.command("push-skill").description("Push a local skill file or directory to the team as a draft").option("--team <id>", "Team ID (uses primary team if omitted)").option("--file <path>", "Path to skill file (.md)").option("--dir <path>", "Path to a skill directory (multi-file skill)").option(
+  "--title <title>",
+  "Skill title (extracted from frontmatter or filename)"
+).option(
+  "--category <cat>",
+  "Category: prompt, checklist, code_pattern, runbook, playbook, other"
+).option("--tags <tags>", "Comma-separated tags").option("--summary <summary>", "Short summary of the skill").action(async (opts) => {
   try {
     const auth = await initializeClient();
     if (!auth) {
       process.exit(1);
     }
     const { client } = auth;
-    if (!opts.file) {
-      console.error("Error: --file is required. Provide a path to a .md file.");
+    if (!opts.file && !opts.dir) {
+      console.error(
+        "Error: --file or --dir is required. Provide a path to a .md file or a skill directory."
+      );
       process.exit(1);
     }
-    let content;
-    try {
-      content = (0, import_fs3.readFileSync)(opts.file, "utf-8");
-    } catch (err) {
-      console.error(`Error: Could not read file "${opts.file}": ${err instanceof Error ? err.message : String(err)}`);
+    if (opts.file && opts.dir) {
+      console.error("Error: Use either --file or --dir, not both.");
       process.exit(1);
     }
     let title = opts.title;
     let summary = opts.summary;
-    let skillContent = content;
-    const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-    if (fmMatch) {
-      const frontmatter = fmMatch[1];
-      skillContent = fmMatch[2].trim();
+    let skillContent;
+    let filesMap = {};
+    if (opts.dir) {
+      let readDirRecursive2 = function(base, dir, out) {
+        for (const entry of (0, import_fs3.readdirSync)(dir)) {
+          const full = (0, import_path4.join)(dir, entry);
+          const rel = (0, import_path4.relative)(base, full);
+          if (rel.includes("..")) continue;
+          if ((0, import_fs3.statSync)(full).isDirectory()) {
+            readDirRecursive2(base, full, out);
+          } else {
+            out[rel] = (0, import_fs3.readFileSync)(full, "utf-8");
+          }
+        }
+      };
+      var readDirRecursive = readDirRecursive2;
+      const dirPath = opts.dir;
+      if (!(0, import_fs3.existsSync)(dirPath) || !(0, import_fs3.statSync)(dirPath).isDirectory()) {
+        console.error(`Error: "${dirPath}" is not a directory.`);
+        process.exit(1);
+      }
+      readDirRecursive2(dirPath, dirPath, filesMap);
+      if (Object.keys(filesMap).length === 0) {
+        console.error(`Error: No files found in "${dirPath}".`);
+        process.exit(1);
+      }
+      const entryNames = ["SKILL.md", "index.md", "README.md"];
+      const entryKey = entryNames.find((n) => filesMap[n]);
+      const entryContent = entryKey ? filesMap[entryKey] : void 0;
+      if (entryContent) {
+        skillContent = entryContent;
+        const fmMatch = entryContent.match(
+          /^---\n([\s\S]*?)\n---\n([\s\S]*)$/
+        );
+        if (fmMatch) {
+          const frontmatter = fmMatch[1];
+          skillContent = fmMatch[2].trim();
+          if (!title) {
+            const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+            title = nameMatch ? nameMatch[1].trim() : void 0;
+          }
+          if (!summary) {
+            const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+            summary = descMatch ? descMatch[1].trim() : void 0;
+          }
+        }
+      } else {
+        const firstMd = Object.keys(filesMap).find(
+          (k) => k.endsWith(".md")
+        );
+        skillContent = firstMd ? filesMap[firstMd] : "";
+      }
       if (!title) {
-        const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-        title = nameMatch ? nameMatch[1].trim() : void 0;
+        title = (0, import_path4.basename)(dirPath).replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       }
-      if (!summary) {
-        const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-        summary = descMatch ? descMatch[1].trim() : void 0;
+    } else {
+      let content;
+      try {
+        content = (0, import_fs3.readFileSync)(opts.file, "utf-8");
+      } catch (err) {
+        console.error(
+          `Error: Could not read file "${opts.file}": ${err instanceof Error ? err.message : String(err)}`
+        );
+        process.exit(1);
       }
-    }
-    if (!title) {
-      title = (0, import_path4.basename)(opts.file).replace(/\.md$/i, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      skillContent = content;
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+      if (fmMatch) {
+        const frontmatter = fmMatch[1];
+        skillContent = fmMatch[2].trim();
+        if (!title) {
+          const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+          title = nameMatch ? nameMatch[1].trim() : void 0;
+        }
+        if (!summary) {
+          const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+          summary = descMatch ? descMatch[1].trim() : void 0;
+        }
+      }
+      if (!title) {
+        title = (0, import_path4.basename)(opts.file).replace(/\.md$/i, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+      filesMap["SKILL.md"] = content;
     }
     let teamId = opts.team;
     if (!teamId) {
@@ -33840,19 +34119,25 @@ program.command("push-skill").description("Push a local skill file to the team a
       content: skillContent,
       summary,
       category: opts.category,
-      tags
+      tags,
+      files: filesMap
     });
+    const fileCount = Object.keys(filesMap).length;
     const output = {
       success: true,
       skillId: result.skillId,
       slug: result.slug,
       title,
       teamId,
-      message: `Created draft skill "${result.slug}" \u2014 submit for review in the web UI`
+      fileCount,
+      message: `Created draft skill "${result.slug}" (${fileCount} file${fileCount !== 1 ? "s" : ""}) \u2014 submit for review in the web UI`
     };
     console.log(JSON.stringify(output, null, 2));
   } catch (error) {
-    console.error("Error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 });
@@ -33872,7 +34157,11 @@ program.command("health").description("Check plugin health and connectivity stat
       healthStatus.errors.push("API key not configured");
     } else {
       try {
-        const client = new GrpcAPIClient(config.user.apiKey, config.backendGrpcUrl, config.grpcUseTls);
+        const client = new GrpcAPIClient(
+          config.user.apiKey,
+          config.backendGrpcUrl,
+          config.grpcUseTls
+        );
         const user = await client.validateApiKey();
         if (user) {
           healthStatus.apiKeyValid = true;
@@ -33894,10 +34183,18 @@ program.command("health").description("Check plugin health and connectivity stat
       console.log(JSON.stringify(healthStatus, null, 2));
     } else {
       console.log("\n--- Plugin Health Check ---\n");
-      console.log(`Configured:         ${healthStatus.configured ? "\u2713" : "\u2717"}`);
-      console.log(`API Key Valid:      ${healthStatus.apiKeyValid ? "\u2713" : "\u2717"}`);
-      console.log(`Backend Connected:  ${healthStatus.backendConnected ? "\u2713" : "\u2717"}`);
-      console.log(`Hooks Registered:   ${healthStatus.hooksRegistered ? "\u2713" : "\u2717"}`);
+      console.log(
+        `Configured:         ${healthStatus.configured ? "\u2713" : "\u2717"}`
+      );
+      console.log(
+        `API Key Valid:      ${healthStatus.apiKeyValid ? "\u2713" : "\u2717"}`
+      );
+      console.log(
+        `Backend Connected:  ${healthStatus.backendConnected ? "\u2713" : "\u2717"}`
+      );
+      console.log(
+        `Hooks Registered:   ${healthStatus.hooksRegistered ? "\u2713" : "\u2717"}`
+      );
       if (healthStatus.errors.length > 0) {
         console.log("\nErrors:");
         healthStatus.errors.forEach((err) => console.log(`  - ${err}`));
@@ -33907,7 +34204,9 @@ program.command("health").description("Check plugin health and connectivity stat
       console.log("");
     }
   } catch (error) {
-    healthStatus.errors.push(error instanceof Error ? error.message : "Unknown error");
+    healthStatus.errors.push(
+      error instanceof Error ? error.message : "Unknown error"
+    );
     if (options.json) {
       console.log(JSON.stringify(healthStatus, null, 2));
     } else {

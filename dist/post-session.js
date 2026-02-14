@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.1
+// SessionHub Plugin v1.0.4
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -24163,7 +24163,9 @@ var GrpcAPIClient = class {
       defaults: true,
       oneofs: true
     });
-    const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+    const protoDescriptor = grpc.loadPackageDefinition(
+      packageDefinition
+    );
     const sessionhub = protoDescriptor.sessionhub;
     const isLocalhostForTls = this.backendUrl.startsWith("localhost") || this.backendUrl.startsWith("127.0.0.1");
     const shouldUseTls = useTls ?? !isLocalhostForTls;
@@ -24172,7 +24174,9 @@ var GrpcAPIClient = class {
       this.backendUrl,
       credentials2
     );
-    logger.info(`gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`);
+    logger.info(
+      `gRPC client connected to ${this.backendUrl} (TLS: ${shouldUseTls})`
+    );
   }
   getMetadata() {
     const metadata = new grpc.Metadata();
@@ -24238,7 +24242,9 @@ var GrpcAPIClient = class {
               resolve(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "API key validation")));
+            reject(
+              new Error(this.getErrorMessage(error, "API key validation"))
+            );
             return;
           }
           resolve({
@@ -24346,7 +24352,9 @@ var GrpcAPIClient = class {
           }
         }
       }
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter((snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0).map((snapshot) => ({
+      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter(
+        (snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0
+      ).map((snapshot) => ({
         timestamp: snapshot.timestamp,
         todos: snapshot.todos.map((todo) => ({
           content: todo.content,
@@ -24354,7 +24362,10 @@ var GrpcAPIClient = class {
           active_form: todo.activeForm
         }))
       })) : [];
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch
+      );
       const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0 ? JSON.stringify(sessionData.sub_sessions) : void 0;
       const request = {
         project_name: sessionData.project_name,
@@ -24395,15 +24406,22 @@ var GrpcAPIClient = class {
     let encryptionMode = "enhanced";
     try {
       const projects = await this.getProjects();
-      const project = projects.find((p) => p.name === sessionData.project_name);
+      const project = projects.find(
+        (p) => p.name === sessionData.project_name
+      );
       if (project) {
         encryptionMode = project.encryption_mode || "enhanced";
         logger.info(`Project encryption mode: ${encryptionMode}`);
       } else {
-        logger.info("Project not found, will use default encryption mode (enhanced)");
+        logger.info(
+          "Project not found, will use default encryption mode (enhanced)"
+        );
       }
     } catch (error) {
-      logger.warn("Failed to fetch projects for encryption mode check, using enhanced:", error);
+      logger.warn(
+        "Failed to fetch projects for encryption mode check, using enhanced:",
+        error
+      );
     }
     const shouldEncrypt = encryptionMode === "hybrid_e2e" || encryptionMode === "full_e2e";
     let publicKey = null;
@@ -24415,32 +24433,48 @@ var GrpcAPIClient = class {
         if (teamKeyData?.publicKey && await isValidPublicKey(teamKeyData.publicKey)) {
           publicKey = teamKeyData.publicKey;
           keyVersion = teamKeyData.keyVersion;
-          logger.info(`Using team encryption key for E2E mode: ${encryptionMode}`);
+          logger.info(
+            `Using team encryption key for E2E mode: ${encryptionMode}`
+          );
         } else {
           const keyData = await this.getUserPublicKey();
           if (keyData?.publicKey && await isValidPublicKey(keyData.publicKey)) {
             publicKey = keyData.publicKey;
             keyVersion = keyData.keyVersion;
-            logger.warn(`Falling back to personal encryption key for E2E mode: ${encryptionMode}`);
+            logger.warn(
+              `Falling back to personal encryption key for E2E mode: ${encryptionMode}`
+            );
           }
         }
         if (!publicKey) {
-          throw new Error(`E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`);
+          throw new Error(
+            `E2E encryption mode (${encryptionMode}) requires a valid team or user key, but none was found. Please configure encryption keys in SessionHub settings.`
+          );
         }
-        encryptedFields = await encryptSessionFields({
-          interactions: sessionData.interactions,
-          todoSnapshots: sessionData.todo_snapshots,
-          subSessions: sessionData.sub_sessions,
-          attachmentUrls: sessionData.attachment_urls
-        }, publicKey);
+        encryptedFields = await encryptSessionFields(
+          {
+            interactions: sessionData.interactions,
+            todoSnapshots: sessionData.todo_snapshots,
+            subSessions: sessionData.sub_sessions,
+            attachmentUrls: sessionData.attachment_urls
+          },
+          publicKey
+        );
         logger.info("Session data encrypted successfully");
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Failed to encrypt session data for ${encryptionMode} mode:`, error);
-        throw new Error(`Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`);
+        logger.error(
+          `Failed to encrypt session data for ${encryptionMode} mode:`,
+          error
+        );
+        throw new Error(
+          `Encryption required for ${encryptionMode} mode but failed: ${errorMessage}`
+        );
       }
     } else {
-      logger.info("Enhanced mode: sending plaintext (server handles encryption at rest)");
+      logger.info(
+        "Enhanced mode: sending plaintext (server handles encryption at rest)"
+      );
     }
     return new Promise((resolve, reject) => {
       const serializedMetadata = {};
@@ -24457,7 +24491,9 @@ var GrpcAPIClient = class {
           }
         }
       }
-      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter((snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0).map((snapshot) => ({
+      const transformedTodoSnapshots = sessionData.todo_snapshots && sessionData.todo_snapshots.length > 0 ? sessionData.todo_snapshots.filter(
+        (snapshot) => snapshot.timestamp && Array.isArray(snapshot.todos) && snapshot.todos.length > 0
+      ).map((snapshot) => ({
         timestamp: snapshot.timestamp,
         todos: snapshot.todos.map((todo) => ({
           content: todo.content,
@@ -24465,7 +24501,10 @@ var GrpcAPIClient = class {
           active_form: todo.activeForm
         }))
       })) : [];
-      const sessionType = this.determineSessionType(sessionData.name, sessionData.git_branch);
+      const sessionType = this.determineSessionType(
+        sessionData.name,
+        sessionData.git_branch
+      );
       const subSessionsJson = sessionData.sub_sessions && sessionData.sub_sessions.length > 0 ? JSON.stringify(sessionData.sub_sessions) : void 0;
       const isEncrypted = encryptedFields !== null;
       const request = {
@@ -24503,31 +24542,33 @@ var GrpcAPIClient = class {
         request.todo_snapshots = transformedTodoSnapshots;
         request.attachment_urls = sessionData.attachment_urls && sessionData.attachment_urls.length > 0 ? this.transformAttachmentMetadata(sessionData.attachment_urls) : [];
         request.sub_sessions_json = subSessionsJson;
-        request.interactions = (sessionData.interactions || []).map((int) => {
-          const serializedInteractionMetadata = {};
-          if (int.metadata) {
-            for (const [key, value] of Object.entries(int.metadata)) {
-              if (typeof value === "string") {
-                serializedInteractionMetadata[key] = value;
-              } else if (typeof value === "number" || typeof value === "boolean") {
-                serializedInteractionMetadata[key] = String(value);
-              } else if (value === null || value === void 0) {
-                serializedInteractionMetadata[key] = String(value);
-              } else {
-                serializedInteractionMetadata[key] = JSON.stringify(value);
+        request.interactions = (sessionData.interactions || []).map(
+          (int) => {
+            const serializedInteractionMetadata = {};
+            if (int.metadata) {
+              for (const [key, value] of Object.entries(int.metadata)) {
+                if (typeof value === "string") {
+                  serializedInteractionMetadata[key] = value;
+                } else if (typeof value === "number" || typeof value === "boolean") {
+                  serializedInteractionMetadata[key] = String(value);
+                } else if (value === null || value === void 0) {
+                  serializedInteractionMetadata[key] = String(value);
+                } else {
+                  serializedInteractionMetadata[key] = JSON.stringify(value);
+                }
               }
             }
+            return {
+              timestamp: int.timestamp,
+              interaction_type: int.interaction_type,
+              content: int.content,
+              tool_name: int.tool_name,
+              metadata: serializedInteractionMetadata,
+              input_tokens: int.input_tokens || 0,
+              output_tokens: int.output_tokens || 0
+            };
           }
-          return {
-            timestamp: int.timestamp,
-            interaction_type: int.interaction_type,
-            content: int.content,
-            tool_name: int.tool_name,
-            metadata: serializedInteractionMetadata,
-            input_tokens: int.input_tokens || 0,
-            output_tokens: int.output_tokens || 0
-          };
-        });
+        );
       }
       this.client.upsertSession(
         request,
@@ -24541,12 +24582,16 @@ var GrpcAPIClient = class {
           }
           const action = response.was_updated ? "updated" : "created";
           const encryptionNote = isEncrypted ? " (encrypted)" : "";
-          logger.info(`Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`);
+          logger.info(
+            `Session ${action}: ${response.session_id} (${response.new_interactions_count} interactions)${encryptionNote}`
+          );
           if (response.analysis_triggered) {
             logger.info("Analysis triggered based on user preferences");
           }
           if (response.observations_triggered) {
-            logger.info("Observations extraction triggered based on user preferences");
+            logger.info(
+              "Observations extraction triggered based on user preferences"
+            );
           }
           resolve({
             sessionId: response.session_id,
@@ -24584,53 +24629,59 @@ var GrpcAPIClient = class {
     let totalFailed = 0;
     for (let i = 0; i < interactions.length; i += chunkSize) {
       const chunk = interactions.slice(i, i + chunkSize);
-      const result = await new Promise((resolve, reject) => {
-        this.client.addInteractionsBatch(
-          {
-            session_id: sessionId,
-            interactions: chunk.map((int) => {
-              const serializedMetadata = {};
-              if (int.metadata) {
-                for (const [key, value] of Object.entries(int.metadata)) {
-                  if (typeof value === "string") {
-                    serializedMetadata[key] = value;
-                  } else if (typeof value === "number" || typeof value === "boolean") {
-                    serializedMetadata[key] = String(value);
-                  } else if (value === null || value === void 0) {
-                    serializedMetadata[key] = String(value);
-                  } else {
-                    serializedMetadata[key] = JSON.stringify(value);
+      const result = await new Promise(
+        (resolve, reject) => {
+          this.client.addInteractionsBatch(
+            {
+              session_id: sessionId,
+              interactions: chunk.map((int) => {
+                const serializedMetadata = {};
+                if (int.metadata) {
+                  for (const [key, value] of Object.entries(int.metadata)) {
+                    if (typeof value === "string") {
+                      serializedMetadata[key] = value;
+                    } else if (typeof value === "number" || typeof value === "boolean") {
+                      serializedMetadata[key] = String(value);
+                    } else if (value === null || value === void 0) {
+                      serializedMetadata[key] = String(value);
+                    } else {
+                      serializedMetadata[key] = JSON.stringify(value);
+                    }
                   }
                 }
+                return {
+                  timestamp: int.timestamp,
+                  interaction_type: int.interaction_type,
+                  content: int.content,
+                  tool_name: int.tool_name,
+                  metadata: serializedMetadata,
+                  input_tokens: int.input_tokens || 0,
+                  output_tokens: int.output_tokens || 0
+                };
+              })
+            },
+            this.getMetadata(),
+            { deadline: this.getDeadline(60) },
+            // Longer timeout for batch operations
+            (error, response) => {
+              if (error) {
+                logger.error(
+                  `Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`
+                );
+                resolve({ processed: 0, failed: chunk.length });
+                return;
               }
-              return {
-                timestamp: int.timestamp,
-                interaction_type: int.interaction_type,
-                content: int.content,
-                tool_name: int.tool_name,
-                metadata: serializedMetadata,
-                input_tokens: int.input_tokens || 0,
-                output_tokens: int.output_tokens || 0
-              };
-            })
-          },
-          this.getMetadata(),
-          { deadline: this.getDeadline(60) },
-          // Longer timeout for batch operations
-          (error, response) => {
-            if (error) {
-              logger.error(`Batch ${Math.floor(i / chunkSize) + 1} failed: ${error.message}`);
-              resolve({ processed: 0, failed: chunk.length });
-              return;
+              logger.info(
+                `Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`
+              );
+              resolve({
+                processed: response.processed,
+                failed: response.failed
+              });
             }
-            logger.info(`Batch ${Math.floor(i / chunkSize) + 1}: ${response.processed} processed`);
-            resolve({
-              processed: response.processed,
-              failed: response.failed
-            });
-          }
-        );
-      });
+          );
+        }
+      );
       totalProcessed += result.processed;
       totalFailed += result.failed;
     }
@@ -24707,7 +24758,9 @@ var GrpcAPIClient = class {
               resolve(null);
               return;
             }
-            reject(new Error(`Failed to get user preferences: ${error.message}`));
+            reject(
+              new Error(`Failed to get user preferences: ${error.message}`)
+            );
             return;
           }
           resolve({
@@ -24806,23 +24859,27 @@ var GrpcAPIClient = class {
               resolve(null);
               return;
             }
-            reject(new Error(`Failed to get project observations: ${error.message}`));
+            reject(
+              new Error(`Failed to get project observations: ${error.message}`)
+            );
             return;
           }
-          const observations = (response.observations || []).map((obs) => ({
-            id: obs.id,
-            sessionId: obs.session_id,
-            projectId: obs.project_id,
-            type: obs.type,
-            title: obs.title,
-            subtitle: obs.subtitle,
-            narrative: obs.narrative,
-            facts: obs.facts || [],
-            concepts: obs.concepts || [],
-            files: obs.files || [],
-            toolName: obs.tool_name,
-            createdAt: obs.created_at
-          }));
+          const observations = (response.observations || []).map(
+            (obs) => ({
+              id: obs.id,
+              sessionId: obs.session_id,
+              projectId: obs.project_id,
+              type: obs.type,
+              title: obs.title,
+              subtitle: obs.subtitle,
+              narrative: obs.narrative,
+              facts: obs.facts || [],
+              concepts: obs.concepts || [],
+              files: obs.files || [],
+              toolName: obs.tool_name,
+              createdAt: obs.created_at
+            })
+          );
           resolve({
             observations,
             totalCount: response.total_count || observations.length
@@ -24847,7 +24904,9 @@ var GrpcAPIClient = class {
               resolve(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "Get user public key")));
+            reject(
+              new Error(this.getErrorMessage(error, "Get user public key"))
+            );
             return;
           }
           resolve({
@@ -24901,7 +24960,9 @@ var GrpcAPIClient = class {
               resolve(null);
               return;
             }
-            reject(new Error(this.getErrorMessage(error, "Get team public key")));
+            reject(
+              new Error(this.getErrorMessage(error, "Get team public key"))
+            );
             return;
           }
           resolve({
@@ -24922,7 +24983,9 @@ var GrpcAPIClient = class {
         return null;
       }
       if (teams.length > 1) {
-        logger.warn(`Multiple teams detected (${teams.length}). Using the first team for encryption.`);
+        logger.warn(
+          `Multiple teams detected (${teams.length}). Using the first team for encryption.`
+        );
       }
       const teamId = teams[0].id;
       const keyData = await this.getTeamPublicKey(teamId);
@@ -24974,7 +25037,8 @@ var GrpcAPIClient = class {
             scope: s.scope,
             version: s.version || 1,
             lastPublishedAt: s.last_published_at || void 0,
-            projectId: s.project_id || void 0
+            projectId: s.project_id || void 0,
+            files: s.files && Object.keys(s.files).length > 0 ? s.files : void 0
           }));
           resolve(skills);
         }
@@ -24997,6 +25061,8 @@ var GrpcAPIClient = class {
       if (input.category) request.category = input.category;
       if (input.tags && input.tags.length > 0) request.tags = input.tags;
       if (input.scope) request.scope = input.scope;
+      if (input.files && Object.keys(input.files).length > 0)
+        request.files = input.files;
       this.client.createTeamSkill(
         request,
         this.getMetadata(),
