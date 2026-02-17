@@ -1,7 +1,7 @@
 ---
 description: View observations for a project or session in the SessionHub web UI
 argument-hint: "[project-name]"
-allowed-tools: ["Bash(node:*)", "Read"]
+allowed-tools: ["Bash(sessionhub:*)", "Read"]
 ---
 
 View observations (decisions, discoveries, patterns) extracted from your Claude Code sessions.
@@ -40,10 +40,11 @@ Tell the user:
 
 If you have a session ID from `last-session.json`, you can verify observations were extracted:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js health --json
+${CLAUDE_PLUGIN_ROOT}/bin/sessionhub observations --json \
+  ${1:+--project "$1"}
 ```
 
-This confirms the plugin is connected and observations should be flowing to the backend.
+This returns current observations payload from the backend for the resolved project.
 
 ## Example Usage
 

@@ -125,7 +125,7 @@ The `SessionStart` hook also injects context from your past sessions, helping Cl
 
 ## Requirements
 
-- Node.js 18+
+- Go 1.22+ (for building the standalone `sessionhub` binary)
 - Claude Code CLI
 - SessionHub account and API key
 
@@ -138,23 +138,15 @@ The `SessionStart` hook also injects context from your past sessions, helping Cl
 git clone https://github.com/sessionhuborg/plugin.git
 cd plugin
 
-# Install dependencies
-pnpm install
-
-# Build (bundles with esbuild for standalone distribution)
-pnpm run build
-
-# Run tests
-pnpm test
+# Build Go CLI runtime used by hooks and commands
+npm run build
 ```
 
 ### Build System
 
-The plugin uses **esbuild** to bundle all dependencies into standalone JavaScript files. This means:
-
-- No `npm install` needed after marketplace installation
-- All dependencies (gRPC, Zod, etc.) are bundled inline
-- Works immediately when installed from the marketplace
+- Hooks execute a standalone Go binary: `bin/sessionhub`
+- Slash commands execute the same standalone binary via command markdown wrappers
+- Go binary is built from `go-cli/cmd/sessionhub` and bundled as `bin/sessionhub`
 
 ### Testing Locally
 
@@ -170,11 +162,11 @@ plugin/
 ├── .claude-plugin/
 │   └── plugin.json        # Plugin manifest
 ├── commands/              # Slash command definitions
-├── hooks/                 # Hook definitions and scripts
-├── src/                   # TypeScript source
-├── dist/                  # Bundled output (self-contained)
+├── hooks/                 # Hook definitions and shell launchers
+├── go-cli/                # Go CLI source
+├── bin/                   # Built standalone sessionhub binary
 ├── proto/                 # gRPC protobuf definitions
-└── esbuild.config.js      # Build configuration
+└── package.json           # Build scripts
 ```
 
 ## Troubleshooting
@@ -193,7 +185,7 @@ If `/sessionhub:captureSession` can't find the session ID:
 
 This happens when session ID injection isn't working. Ensure:
 1. The plugin is properly installed
-2. Node.js 18+ is available in PATH
+2. `bin/sessionhub` exists and is executable
 3. Restart Claude Code after plugin installation
 
 ### Authentication failed

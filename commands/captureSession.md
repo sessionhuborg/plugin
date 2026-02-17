@@ -1,7 +1,7 @@
 ---
 description: Capture current Claude Code session to SessionHub
 argument-hint: "[session-name] [project-name] [-n last-N] [-t transcript] [--api-key key] [--project-path path] [--session-id id]"
-allowed-tools: ["Bash(node:*)"]
+allowed-tools: ["Bash(sessionhub:*)"]
 ---
 
 Capture the current Claude Code session to SessionHub for analytics and tracking.
@@ -26,7 +26,7 @@ Capture the current Claude Code session to SessionHub for analytics and tracking
 2. Run the SessionHub CLI using the extracted values:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js capture \
+${CLAUDE_PLUGIN_ROOT}/bin/sessionhub capture --json \
   --project-path "PROJECT_DIR_HERE" \
   --session-id "SESSION_ID_HERE" \
   ${1:+--session "$1"} \

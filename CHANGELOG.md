@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-02-17
+
+### Changed
+- Migrated plugin runtime to standalone Go CLI (`bin/sessionhub`) for hooks and command execution
+- Removed Node.js runtime dependency from plugin command/hook paths
+- Moved CLI source into plugin-owned `go-cli/` for self-contained marketplace distribution
+- Added Go implementations for `capture`, `import-all`, `observations`, `sync-skills`, and `push-skill`
+
 ## [1.0.0] - 2025-01-16
 
 ### Added

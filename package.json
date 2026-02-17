@@ -1,25 +1,23 @@
 {
   "name": "sessionhub-plugin",
-  "version": "1.0.5",
-  "description": "Claude Code plugin for capturing AI development sessions",
-  "main": "dist/cli.js",
+  "version": "1.0.6",
+  "description": "Claude Code plugin for capturing AI development sessions via standalone Go CLI",
   "bin": {
-    "sessionhub-cli": "dist/cli.js"
+    "sessionhub": "bin/sessionhub"
   },
   "files": [
-    "dist",
+    "bin",
+    "go-cli",
     "proto",
     "hooks",
     "commands",
     "skills"
   ],
   "scripts": {
-    "build": "node esbuild.config.js",
-    "build:types": "tsc --emitDeclarationOnly",
-    "dev": "ts-node --esm src/cli.ts",
-    "start": "node dist/cli.js",
-    "test": "vitest",
-    "test:coverage": "vitest --coverage"
+    "build:go-cli": "ROOT=$(pwd) && mkdir -p \"$ROOT/.cache/go-build\" && cd go-cli && GOCACHE=\"$ROOT/.cache/go-build\" go build -o ../bin/sessionhub ./cmd/sessionhub",
+    "build": "npm run build:go-cli",
+    "build:all": "npm run build:go-cli",
+    "test:go": "ROOT=$(pwd) && mkdir -p \"$ROOT/.cache/go-build\" && cd go-cli && GOCACHE=\"$ROOT/.cache/go-build\" go test ./..."
   },
   "keywords": [
     "claude-code",
@@ -29,25 +27,5 @@
     "tracking"
   ],
   "author": "SessionHub",
-  "license": "MIT",
-  "dependencies": {
-    "@grpc/grpc-js": "^1.14.0",
-    "@grpc/proto-loader": "^0.8.0",
-    "@supabase/supabase-js": "^2.58.0",
-    "base64-arraybuffer": "^1.0.2",
-    "commander": "^11.0.0",
-    "zod": "^3.22.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^2.0.0",
-    "esbuild": "^0.24.2",
-    "ts-node": "^10.9.0",
-    "ts-proto": "^2.7.7",
-    "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "license": "MIT"
 }

@@ -1,7 +1,7 @@
 ---
 description: Sync approved team skills from SessionHub to ~/.claude/skills/
 argument-hint: "[--team team-id] [--project project-id]"
-allowed-tools: ["Bash(node:*)"]
+allowed-tools: ["Bash(sessionhub:*)"]
 ---
 
 Sync approved team skills from SessionHub to `~/.claude/skills/` — the standard Claude Code personal skills directory. All skills are namespaced by team slug to prevent cross-team collisions. Once synced, Claude Code auto-discovers these skills and loads them JIT when contextually relevant.
@@ -14,7 +14,7 @@ Sync approved team skills from SessionHub to `~/.claude/skills/` — the standar
 1. Run the sync command:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js sync-skills ${1:+--team "$1"}
+${CLAUDE_PLUGIN_ROOT}/bin/sessionhub sync-skills --json ${1:+--team "$1"}
 ```
 
 2. Parse the JSON output and report:

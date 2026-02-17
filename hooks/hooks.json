@@ -6,16 +6,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/inject-session-id.js\""
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session_start.sh\""
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/context-hook.js\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session_start_context.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/clear-capture.js\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session_start_clear_capture.sh\"",
             "timeout": 10
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/post-session.js\""
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session_end.sh\""
           }
         ]
       }
