@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.4
+// SessionHub Plugin v1.0.5
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -24843,6 +24843,7 @@ var GrpcAPIClient = class {
   }
   /**
    * Get project observations for context injection
+   * Updated to include project-scoped lifecycle governance fields
    */
   async getProjectObservations(projectId, limit) {
     return new Promise((resolve, reject) => {
@@ -24877,6 +24878,9 @@ var GrpcAPIClient = class {
               concepts: obs.concepts || [],
               files: obs.files || [],
               toolName: obs.tool_name,
+              // Project-scoped lifecycle governance fields
+              observationScope: obs.observation_scope,
+              lifecycleState: obs.lifecycle_state,
               createdAt: obs.created_at
             })
           );

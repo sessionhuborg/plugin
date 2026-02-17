@@ -140,7 +140,7 @@ async function ensureProject(
 program
   .name("sessionhub-cli")
   .description("Capture and import Claude Code sessions to SessionHub")
-  .version("1.0.0");
+  .version("1.0.5");
 
 // Setup command - configure API key
 program
@@ -1119,9 +1119,7 @@ program
           }
         } else {
           // No recognized entry file — use first .md file content
-          const firstMd = Object.keys(filesMap).find((k) =>
-            k.endsWith(".md"),
-          );
+          const firstMd = Object.keys(filesMap).find((k) => k.endsWith(".md"));
           skillContent = firstMd ? filesMap[firstMd] : "";
         }
 

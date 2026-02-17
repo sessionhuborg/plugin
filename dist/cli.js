@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.4
+// SessionHub Plugin v1.0.5
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -31778,6 +31778,7 @@ var GrpcAPIClient = class {
   }
   /**
    * Get project observations for context injection
+   * Updated to include project-scoped lifecycle governance fields
    */
   async getProjectObservations(projectId, limit) {
     return new Promise((resolve2, reject) => {
@@ -31812,6 +31813,9 @@ var GrpcAPIClient = class {
               concepts: obs.concepts || [],
               files: obs.files || [],
               toolName: obs.tool_name,
+              // Project-scoped lifecycle governance fields
+              observationScope: obs.observation_scope,
+              lifecycleState: obs.lifecycle_state,
               createdAt: obs.created_at
             })
           );
@@ -33319,7 +33323,7 @@ async function ensureProject(client, projectName, projectPath) {
     branch: detectedProject.branch
   };
 }
-program.name("sessionhub-cli").description("Capture and import Claude Code sessions to SessionHub").version("1.0.0");
+program.name("sessionhub-cli").description("Capture and import Claude Code sessions to SessionHub").version("1.0.5");
 program.command("setup").description("Configure SessionHub with your API key").option("--api-key <key>", "Your SessionHub API key").action(async (opts) => {
   try {
     const apiKey = opts.apiKey;
@@ -34066,9 +34070,7 @@ program.command("push-skill").description("Push a local skill file or directory 
           }
         }
       } else {
-        const firstMd = Object.keys(filesMap).find(
-          (k) => k.endsWith(".md")
-        );
+        const firstMd = Object.keys(filesMap).find((k) => k.endsWith(".md"));
         skillContent = firstMd ? filesMap[firstMd] : "";
       }
       if (!title) {
