@@ -1,7 +1,7 @@
 ---
 description: View observations for a project or session in the SessionHub web UI
 argument-hint: "[project-name]"
-allowed-tools: ["Bash(sessionhub:*)", "Read"]
+allowed-tools: ["Bash(bash:*)", "Read"]
 ---
 
 View observations (decisions, discoveries, patterns) extracted from your Claude Code sessions.
@@ -40,7 +40,7 @@ Tell the user:
 
 If you have a session ID from `last-session.json`, you can verify observations were extracted:
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/sessionhub observations --json \
+bash ${CLAUDE_PLUGIN_ROOT}/hooks/sessionhub.sh observations --json \
   ${1:+--project "$1"}
 ```
 

@@ -1,7 +1,7 @@
 ---
 description: Configure SessionHub with your API key (Go CLI)
 argument-hint: "[api-key]"
-allowed-tools: ["Bash(sessionhub:*)"]
+allowed-tools: ["Bash(bash:*)"]
 ---
 
 Set up SessionHub by configuring your API key. This is required before you can capture sessions.
@@ -24,7 +24,7 @@ Set up SessionHub by configuring your API key. This is required before you can c
 Run this command to save the config (replace API_KEY_HERE with the actual key):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/sessionhub setup --api-key "API_KEY_HERE" --json
+bash ${CLAUDE_PLUGIN_ROOT}/hooks/sessionhub.sh setup --api-key "API_KEY_HERE" --json
 ```
 
 4. **Report the result**:

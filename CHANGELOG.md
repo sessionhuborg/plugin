@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-02-17
+
+### Fixed
+- Added `hooks/sessionhub.sh` bootstrap launcher that auto-builds `bin/sessionhub` from `go-cli` when binary is missing
+- Updated all hooks and command wrappers to route through bootstrap launcher
+- Prevented install/runtime failures on marketplace caches that do not include a prebuilt binary
+
 ## [1.0.6] - 2026-02-17
 
 ### Changed

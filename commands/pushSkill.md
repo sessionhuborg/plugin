@@ -1,7 +1,7 @@
 ---
 description: Push a local skill file or directory to the team as a draft for review
 argument-hint: "<file-or-dir-path> [--title name] [--category type] [--tags a,b,c]"
-allowed-tools: ["Bash(sessionhub:*)", "Read", "Glob"]
+allowed-tools: ["Bash(bash:*)", "Read", "Glob"]
 ---
 
 Push a local SKILL.md file or a multi-file skill directory to the team's Skills Hub as a draft. The skill will appear in the web UI for review and approval.
@@ -22,12 +22,12 @@ Push a local SKILL.md file or a multi-file skill directory to the team's Skills 
 
 For a single file:
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/sessionhub push-skill --json --file "$1"
+bash ${CLAUDE_PLUGIN_ROOT}/hooks/sessionhub.sh push-skill --json --file "$1"
 ```
 
 For a directory (multi-file skill):
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/sessionhub push-skill --json --dir "$1"
+bash ${CLAUDE_PLUGIN_ROOT}/hooks/sessionhub.sh push-skill --json --dir "$1"
 ```
 
 If additional options were specified by the user, include them:

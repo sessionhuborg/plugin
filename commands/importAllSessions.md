@@ -1,7 +1,7 @@
 ---
 description: Import all Claude Code sessions from project to SessionHub
 argument-hint: "[project-path] [project-name]"
-allowed-tools: ["Bash(sessionhub:*)"]
+allowed-tools: ["Bash(bash:*)"]
 ---
 
 Bulk import all Claude Code transcript files from a project directory to SessionHub.
@@ -20,7 +20,7 @@ Bulk import all Claude Code transcript files from a project directory to Session
 2. Run the SessionHub CLI to import all sessions:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/sessionhub import-all --json \
+bash ${CLAUDE_PLUGIN_ROOT}/hooks/sessionhub.sh import-all --json \
   --path "PROJECT_PATH_HERE" \
   ${2:+--project "$2"}
 ```
