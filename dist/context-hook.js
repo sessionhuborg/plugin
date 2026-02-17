@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SessionHub Plugin v1.0.4
+// SessionHub Plugin v1.0.5
 
 var __import_meta_url = require('url').pathToFileURL(__filename).href;
 var import_meta = { url: __import_meta_url };
@@ -24011,6 +24011,31 @@ var import_path2 = __toESM(require("path"));
 var import_os = require("os");
 
 // src/context-formatter.ts
+function filterObservationsForInjection(observations, options = {}) {
+  const { includeDraft = false, includeDeprecated = false } = options;
+  return observations.filter((obs) => {
+    const scope = obs.observation_scope || "session";
+    const state = obs.lifecycle_state || "active";
+    if (state === "superseded") return false;
+    if (state === "deprecated" && !includeDeprecated) return false;
+    if (state === "draft" && !includeDraft) return false;
+    if (state !== "active" && state !== "draft") return false;
+    return true;
+  });
+}
+function sortObservationsByPriority(observations) {
+  return [...observations].sort((a, b) => {
+    const scopeOrder = (obs) => {
+      const scope = obs.observation_scope || "session";
+      const state = obs.lifecycle_state || "active";
+      if (scope === "project" && state === "active") return 0;
+      if (scope === "session" && state === "active") return 1;
+      if (state === "draft") return 2;
+      return 3;
+    };
+    return scopeOrder(a) - scopeOrder(b);
+  });
+}
 var TYPE_EMOJI_MAP = {
   bugfix: "\u{1F527}",
   feature: "\u2728",
@@ -24076,38 +24101,57 @@ function formatObservationsContext(observations, options = {}) {
     topN = 10,
     includeTable = true,
     includeFullDetails = true,
-    projectName
+    projectName,
+    includeDraft = false,
+    includeDeprecated = false
   } = options;
-  if (observations.length === 0) {
-    return "# Project Memory\n\nNo observations recorded yet.";
+  const filteredObservations = filterObservationsForInjection(observations, {
+    includeDraft,
+    includeDeprecated
+  });
+  const sortedObservations = sortObservationsByPriority(filteredObservations);
+  if (sortedObservations.length === 0) {
+    const fallbackObservations = observations.filter((obs) => {
+      const scope = obs.observation_scope || "session";
+      const state = obs.lifecycle_state || "active";
+      return scope === "session" && state === "active";
+    });
+    if (fallbackObservations.length === 0) {
+      return "# Project Memory\n\nNo active observations recorded yet.";
+    }
+    return formatObservationsContext(fallbackObservations, {
+      ...options,
+      includeDraft: true
+    });
   }
   let output = "";
   const projectTitle = projectName ? ` (${projectName})` : "";
-  output += `# Project Memory${projectTitle}
+  const scopeNote = sortedObservations.some((o) => o.observation_scope === "project") ? " (project-scoped)" : "";
+  output += `# Project Memory${projectTitle}${scopeNote}
 
 `;
-  output += `${observations.length} observation${observations.length === 1 ? "" : "s"} recorded from your recent work.
+  output += `${sortedObservations.length} active observation${sortedObservations.length === 1 ? "" : "s"} for context.
 
 `;
   if (includeTable) {
     output += "## Overview\n\n";
     output += "| # | Type | Title | Files | Date |\n";
     output += "|---|------|-------|-------|------|\n";
-    for (let i = 0; i < observations.length; i++) {
-      output += formatTableRow(observations[i], i) + "\n";
+    for (let i = 0; i < sortedObservations.length; i++) {
+      output += formatTableRow(sortedObservations[i], i) + "\n";
     }
     output += "\n";
   }
-  if (includeFullDetails && observations.length > 0) {
-    const detailCount = Math.min(topN, observations.length);
+  if (includeFullDetails && sortedObservations.length > 0) {
+    const detailCount = Math.min(topN, sortedObservations.length);
     output += `## Recent Details (Top ${detailCount})
 
 `;
     for (let i = 0; i < detailCount; i++) {
-      output += formatFullObservation(observations[i], i);
+      output += formatFullObservation(sortedObservations[i], i);
     }
-    if (observations.length > detailCount) {
-      output += `*${observations.length - detailCount} more observation${observations.length - detailCount === 1 ? "" : "s"} available (see overview table above)*
+    if (sortedObservations.length > detailCount) {
+      output += `*${sortedObservations.length - detailCount} more observation${sortedObservations.length - detailCount === 1 ? "" : "s"} available (see overview table above)*
 
 `;
     }
@@ -24946,6 +24990,7 @@ var GrpcAPIClient = class {
   }
   /**
    * Get project observations for context injection
+   * Updated to include project-scoped lifecycle governance fields
    */
   async getProjectObservations(projectId, limit) {
     return new Promise((resolve, reject) => {
@@ -24980,6 +25025,9 @@ var GrpcAPIClient = class {
               concepts: obs.concepts || [],
               files: obs.files || [],
               toolName: obs.tool_name,
+              // Project-scoped lifecycle governance fields
+              observationScope: obs.observation_scope,
+              lifecycleState: obs.lifecycle_state,
               createdAt: obs.created_at
             })
           );

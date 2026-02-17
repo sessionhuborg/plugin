@@ -1,6 +1,6 @@
 {
   "name": "sessionhub-plugin",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Claude Code plugin for capturing AI development sessions",
   "main": "dist/cli.js",
   "bin": {
